@@ -373,11 +373,6 @@ var REISTIJD_ACT = "Reizen";
 var MEERWERK_REDENEN = ["Klantwijziging","Extra werkzaamheden","Fout in tekening","Productiefout","Wachten op materiaal","Leverancier vertraagd","Anders"];
 
 function actKey(fase, act){ return fase + " › " + act; }
-function alleActiviteiten(){
-  var out = [];
-  FASES.forEach(function(f){ f.activiteiten.forEach(function(a){ out.push({ fase:f.naam, act:a, key:actKey(f.naam,a) }); }); });
-  return out;
-}
 
 /* ====================================================================
    3. HULPFUNCTIES (tijd & opmaak)
@@ -848,7 +843,7 @@ function dashMaandView(){
   var omzet={};
   STORE.projecten.forEach(function(p){ if(p.status==="opgeleverd"&&p.opgeleverdOp&&p.offertebedrag){ var k=p.opgeleverdOp.slice(0,7); omzet[k]=(omzet[k]||0)+(parseFloat(p.offertebedrag)||0); } });
   var keys=Object.keys(perM).sort().reverse();
-  var maxTot=Math.max.apply(null,keys.map(function(k){return perM[k].tot;}));
+  var maxTot=Math.max.apply(null,keys.map(function(k){return perM[k].tot;}))||1;
   var h='<div class="card"><table class="tbl"><thead><tr><th>Maand</th><th class="num">Uren</th><th class="num">Productief</th><th class="num">Omzet</th></tr></thead><tbody>';
   keys.forEach(function(k){
     var d=perM[k]; var pct=Math.round(d.tot/maxTot*100);
@@ -960,7 +955,7 @@ function beheerData(){
   h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Overzicht mailen</div>'+
     '<p class="muted" style="margin-top:0;">Stuur een samenvatting van alle projecten (begroot vs werkelijk, marge) naar '+esc(MAIL_ONTVANGER)+'.</p>'+
     '<button class="btn btn-wood" onclick="mailOverzicht()">✉ Mail projectoverzicht</button></div>';
-  var sync = DB && DB.type==="firebase" ? "Live gesynchroniseerd via Firebase." : "Let op: data staat alléén op dit apparaat. Vul FIREBASE_CONFIG in het bestand in om te delen tussen apparaten (zie installatie-uitleg onderaan het bestand).";
+  var sync = DB && DB.type==="firebase" ? "Live gesynchroniseerd via Firebase." : "Let op: data staat alléén op dit apparaat. Vul FIREBASE_CONFIG bovenin het bestand in om te delen tussen apparaten.";
   h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Synchronisatie</div><p class="muted" style="margin:0;">'+sync+'</p></div>';
   if(BEHEERCODE){
     h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Beheer afsluiten</div>'+
@@ -1072,6 +1067,7 @@ function init(){
   if(isOntgrendeld()) startApp(); else toonSlot();
 }
 function startApp(){
+  if(DB) return; // voorkom dubbele initialisatie
   if(firebaseIngevuld()){
     try { DB=FireDB(); } catch(e){ console.warn("Firebase init mislukt, lokaal gebruiken:",e); DB=LocalDB(); }
   } else { DB=LocalDB(); }
@@ -1086,32 +1082,7 @@ function startApp(){
 init();
 </script>
 
-<!-- ====================================================================
-     INSTALLATIE — FIREBASE KOPPELEN (eenmalig, ~5 min, gratis)
-     ====================================================================
-  Zolang FIREBASE_CONFIG bovenin leeg is, werkt de app lokaal op dit
-  apparaat (data wordt in de browser bewaard). Wil je dat het werkplaats-
-  scherm én de telefoons dezelfde data delen, koppel dan Firebase:
-
-  1. Ga naar https://console.firebase.google.com en log in met een Google-account.
-  2. Klik "Project toevoegen" → geef het een naam (bijv. "dvb-uren") → maak aan.
-  3. Klik linksboven op het tandwiel → "Projectinstellingen".
-  4. Scrol naar "Jouw apps" → klik op het web-icoon  </>  → geef een bijnaam → "App registreren".
-  5. Je krijgt nu een blokje "firebaseConfig" met apiKey, authDomain, projectId, enz.
-     Kopieer die waarden naar FIREBASE_CONFIG bovenin dit bestand.
-  6. In het linkermenu: "Build" → "Firestore Database" → "Database maken" →
-     kies een locatie (europe-west) → start in TESTMODUS (of zie regels hieronder).
-  7. Klaar! Zet dit index.html op GitHub Pages. Alle apparaten die de pagina
-     openen delen nu live dezelfde uren.
-
-  Veiligheidsregels (Firestore → Regels) — voor intern gebruik, simpel:
-      rules_version = '2';
-      service cloud.firestore {
-        match /databases/{database}/documents {
-          match /{document=**} { allow read, write: if true; }
-        }
-      }
-  (Wil je het afschermen? Zet er Firebase Authentication op en pas de regels aan.)
-==================================================================== -->
+<!-- Firebase is gekoppeld (project dvb-uren-app). Instellingen staan bovenin
+     het bestand: FIREBASE_CONFIG, TOEGANGSCODE, BEHEERCODE en MAIL_ONTVANGER. -->
 </body>
 </html>
