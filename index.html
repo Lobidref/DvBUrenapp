@@ -682,40 +682,65 @@ function renderKm(){
   var totaal=ritten.reduce(function(s,r){return s+(r.km||0);},0);
   h+='<div class="stat-grid" style="margin-top:16px;"><div class="stat"><div class="lab">Totaal km</div><div class="val wood">'+totaal.toLocaleString("nl-NL")+'</div></div>'+
      '<div class="stat"><div class="lab">Ritten</div><div class="val">'+ritten.length+'</div></div></div>';
+  if(!beheerOntgrendeld) h+='<p class="muted" style="font-size:0.78rem;">Staat er een rit verkeerd? De eigenaar kan deze aanpassen of verwijderen via <b>Beheer</b>.</p>';
   h+='<div class="card">';
   ritten.forEach(function(r){
     var p=projectById(r.projectId);
-    h+='<div class="row-line"><div class="grow"><div class="t1">'+esc(p?p.naam:"—")+' · '+(r.km||0)+' km</div>'+
+    var klik=beheerOntgrendeld;
+    h+='<div class="row-line"'+(klik?' style="cursor:pointer" onclick="ritModal(\''+r.id+'\')"':'')+'><div class="grow"><div class="t1">'+esc(p?p.naam:"—")+' · '+(r.km||0)+' km</div>'+
        '<div class="t2">'+esc(r.datum)+' · '+esc(r.bestuurder||"?")+' · '+esc(r.bus||"?")+' · '+(r.beginstand||0)+'→'+(r.eindstand||0)+'</div></div>'+
-       '<button class="rm" onclick="DB.remove(\'ritten\',\''+r.id+'\')">×</button></div>';
+       (klik?'<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="var(--wood)" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>':'')+'</div>';
   });
   h+='</div>';
   v.innerHTML=h;
 }
-function ritModal(){
-  var mw=actieveMedewerkers(), bus=STORE.bussen, pr=actieveProjecten();
-  var h='<h3>Nieuwe rit</h3>';
-  h+='<label class="fld">Datum</label><input type="date" id="rDatum" value="'+vandaagISO()+'">';
-  h+='<label class="fld">Bestuurder</label><select id="rBest"><option value="" disabled selected hidden>Kies…</option>'+mw.map(function(m){return '<option>'+esc(m.naam)+'</option>';}).join("")+'</select>';
-  h+='<label class="fld">Bus</label><select id="rBus"><option value="" disabled selected hidden>Kies…</option>'+bus.map(function(b){return '<option>'+esc(b.naam)+'</option>';}).join("")+(bus.length?"":'<option value="Bus">Bus</option>')+'</select>';
-  h+='<label class="fld">Project</label><select id="rProj"><option value="" disabled selected hidden>Kies…</option>'+pr.map(function(p){return '<option value="'+p.id+'">'+esc(p.naam)+'</option>';}).join("")+'</select>';
-  h+='<div class="grid2"><div><label class="fld">Beginstand (km)</label><input type="number" id="rBegin" inputmode="numeric" placeholder="0"></div>'+
-     '<div><label class="fld">Eindstand (km)</label><input type="number" id="rEind" inputmode="numeric" placeholder="0"></div></div>';
-  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="ritOpslaan()">Rit opslaan</button>';
-  h+='<button class="btn btn-line" style="width:100%;margin-top:8px;" onclick="closeModal()">Annuleren</button>';
+function ritModal(id){
+  var r = id ? STORE.ritten.find(function(x){return x.id===id;}) : null;
+  var bus=STORE.bussen, pr=STORE.projecten.slice().sort(function(a,b){return a.naam.localeCompare(b.naam);});
+  var mwNamen=actieveMedewerkers().map(function(m){return m.naam;});
+  if(r && r.bestuurder && mwNamen.indexOf(r.bestuurder)<0) mwNamen.push(r.bestuurder);
+  function s(a,b){ return a===b?" selected":""; }
+  var h='<h3>'+(r?"Rit aanpassen":"Nieuwe rit")+'</h3>';
+  h+='<label class="fld">Datum</label><input type="date" id="rDatum" value="'+esc(r?r.datum:vandaagISO())+'">';
+  h+='<label class="fld">Bestuurder</label><select id="rBest"><option value="" disabled'+(r?"":" selected")+' hidden>Kies…</option>'+mwNamen.map(function(n){return '<option'+s(n, r&&r.bestuurder)+'>'+esc(n)+'</option>';}).join("")+'</select>';
+  h+='<label class="fld">Bus</label><select id="rBus" onchange="ritVulBeginstand()"><option value="" disabled'+(r?"":" selected")+' hidden>Kies…</option>'+bus.map(function(b){return '<option'+s(b.naam, r&&r.bus)+'>'+esc(b.naam)+'</option>';}).join("")+(bus.length?"":'<option value="Bus"'+s("Bus", r&&r.bus)+'>Bus</option>')+'</select>';
+  h+='<label class="fld">Project</label><select id="rProj"><option value="" disabled'+(r?"":" selected")+' hidden>Kies…</option>'+pr.map(function(p){return '<option value="'+p.id+'"'+s(p.id, r&&r.projectId)+'>'+esc(p.naam)+'</option>';}).join("")+'</select>';
+  h+='<div class="grid2"><div><label class="fld">Beginstand (km)</label><input type="number" id="rBegin" inputmode="numeric" placeholder="0" value="'+esc(r?r.beginstand:"")+'"></div>'+
+     '<div><label class="fld">Eindstand (km)</label><input type="number" id="rEind" inputmode="numeric" placeholder="0" value="'+esc(r?r.eindstand:"")+'"></div></div>';
+  h+='<div class="muted" id="rBeginHint" style="font-size:0.74rem;margin-top:6px;">'+(r?"":"Kies eerst een bus — dan vult de beginstand zich automatisch met de laatste stand.")+'</div>';
+  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="ritOpslaan('+(r?("'"+r.id+"'"):"")+')">'+(r?"Wijzigingen opslaan":"Rit opslaan")+'</button>';
+  if(r){ h+='<div class="grid2" style="margin-top:8px;"><button class="btn btn-line" onclick="closeModal()">Annuleren</button>'+
+    '<button class="btn btn-line" style="color:var(--err);border-color:var(--err)" onclick="ritVerwijder(\''+r.id+'\')">Verwijderen</button></div>'; }
+  else { h+='<button class="btn btn-line" style="width:100%;margin-top:8px;" onclick="closeModal()">Annuleren</button>'; }
   openModal(h);
 }
-function ritOpslaan(){
+function laatsteStandVanBus(busNaam){
+  var rt=STORE.ritten.filter(function(r){return r.bus===busNaam && (r.eindstand||r.eindstand===0);});
+  if(!rt.length) return null;
+  rt.sort(function(a,b){return ((b.datum||"")+b.id).localeCompare((a.datum||"")+a.id);});
+  return rt[0].eindstand;
+}
+function ritVulBeginstand(){
+  var bus=document.getElementById("rBus").value;
+  var inp=document.getElementById("rBegin"), hint=document.getElementById("rBeginHint");
+  var st=laatsteStandVanBus(bus);
+  if(st!=null){ inp.value=st; hint.textContent="Laatste stand van "+bus+": "+st+" km — pas aan als de teller anders staat."; }
+  else { hint.textContent="Nog geen eerdere rit met deze bus; vul de beginstand één keer zelf in."; }
+}
+function ritOpslaan(id){
   var begin=parseFloat(document.getElementById("rBegin").value)||0;
   var eind=parseFloat(document.getElementById("rEind").value)||0;
   var proj=document.getElementById("rProj").value;
   if(!proj){ toast("Kies een project"); return; }
   var km=Math.max(0, eind-begin);
-  DB.add("ritten", { id:uid(), datum:document.getElementById("rDatum").value||vandaagISO(),
+  var data={ datum:document.getElementById("rDatum").value||vandaagISO(),
     bestuurder:document.getElementById("rBest").value, bus:document.getElementById("rBus").value,
-    projectId:proj, beginstand:begin, eindstand:eind, km:km });
-  closeModal(); toast(km+" km opgeslagen ✓");
+    projectId:proj, beginstand:begin, eindstand:eind, km:km };
+  if(id){ DB.update("ritten", id, data); toast("Rit aangepast ✓"); }
+  else { data.id=uid(); DB.add("ritten", data); toast(km+" km opgeslagen ✓"); }
+  closeModal();
 }
+function ritVerwijder(id){ if(confirm("Deze rit definitief verwijderen?")){ DB.remove("ritten", id); closeModal(); toast("Rit verwijderd"); } }
 
 /* ====================================================================
    9. DASHBOARD
@@ -863,10 +888,12 @@ function renderBeheer(){
   var v=document.getElementById("view-beheer");
   var h='<div class="cat-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V19a2 2 0 11-4 0 1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1A1.6 1.6 0 005 13 2 2 0 113 9a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H10a1.6 1.6 0 001-1.5V2a2 2 0 114 0 1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V8a1.6 1.6 0 001.5 1H22a2 2 0 110 4 1.6 1.6 0 00-1.5 1z" stroke-linejoin="round"/></svg>Beheer</div>';
   h+='<div class="seg"><button class="'+(beheerTab==="projecten"?"on":"")+'" onclick="beheerTab=\'projecten\';renderBeheer()">Projecten</button>'+
-     '<button class="'+(beheerTab==="mw"?"on":"")+'" onclick="beheerTab=\'mw\';renderBeheer()">Medewerkers</button>'+
+     '<button class="'+(beheerTab==="uren"?"on":"")+'" onclick="beheerTab=\'uren\';renderBeheer()">Uren</button>'+
+     '<button class="'+(beheerTab==="mw"?"on":"")+'" onclick="beheerTab=\'mw\';renderBeheer()">Personeel</button>'+
      '<button class="'+(beheerTab==="bus"?"on":"")+'" onclick="beheerTab=\'bus\';renderBeheer()">Bussen</button>'+
      '<button class="'+(beheerTab==="data"?"on":"")+'" onclick="beheerTab=\'data\';renderBeheer()">Data</button></div>';
   if(beheerTab==="projecten") h+=beheerProjecten();
+  else if(beheerTab==="uren") h+=beheerUren();
   else if(beheerTab==="mw") h+=beheerLijst("medewerkers","medewerker");
   else if(beheerTab==="bus") h+=beheerLijst("bussen","bus");
   else h+=beheerData();
@@ -943,6 +970,89 @@ function beheerLijst(coll, label){
 }
 function lijstToevoegen(coll){ var i=document.getElementById("addNaam"); var n=i.value.trim(); if(!n){i.focus();return;} DB.add(coll,{id:uid(),naam:n,actief:true}); toast("Toegevoegd ✓"); }
 
+function beheerUren(){
+  var regels=STORE.tijdregels.slice().sort(function(a,b){return b.start-a.start;});
+  var h='<p class="muted" style="margin-top:0;">Tik op een regel om medewerker, project, activiteit, datum, uren of meerwerk aan te passen — of de regel te verwijderen. Handig als iemand iets verkeerd heeft ingevoerd.</p>';
+  if(!regels.length) return h+'<div class="empty">Nog geen uren geboekt.</div>';
+  h+='<div class="card">';
+  regels.slice(0,150).forEach(function(r){
+    var p=projectById(r.projectId)||{naam:"?"};
+    var datum=new Date(r.start).toLocaleDateString("nl-NL",{day:"2-digit",month:"short"});
+    var uren=r.status==="lopend" ? '<span class="pill green">loopt</span>' : fmtU(urenDec(regelMs(r)))+" u";
+    h+='<div class="row-line" style="cursor:pointer" onclick="bewerkRegel(\''+r.id+'\')">'+
+       '<div class="grow"><div class="t1">'+esc(r.medewerker||"?")+' · '+esc(p.naam)+(r.meerwerk?' <span class="pill red">meerwerk</span>':'')+'</div>'+
+       '<div class="t2">'+datum+' · '+esc(r.fase)+' › '+esc(r.activiteit)+'</div></div>'+
+       '<div class="val">'+uren+'</div></div>';
+  });
+  h+='</div>';
+  if(regels.length>150) h+='<p class="muted">Alleen de 150 nieuwste regels worden getoond.</p>';
+  return h;
+}
+function bewerkRegel(id){
+  var r=STORE.tijdregels.find(function(x){return x.id===id;}); if(!r) return;
+  var d=new Date(r.start);
+  window.__edit={ id:r.id, medewerker:r.medewerker||"", projectId:r.projectId,
+    actKey: actKey(r.fase, r.activiteit),
+    datum: d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),
+    uren: String(Math.round(urenDec(regelMs(r))*100)/100).replace(".",","),
+    reden: r.meerwerk?(r.meerwerkReden||""):"" };
+  renderEditModal();
+}
+function captureEdit(){
+  function g(id){ var el=document.getElementById(id); return el?el.value:undefined; }
+  var v;
+  if((v=g("eMw"))!==undefined) window.__edit.medewerker=v;
+  if((v=g("eProj"))!==undefined) window.__edit.projectId=v;
+  if((v=g("eAct"))!==undefined) window.__edit.actKey=v;
+  if((v=g("eDatum"))!==undefined) window.__edit.datum=v;
+  if((v=g("eUren"))!==undefined) window.__edit.uren=v;
+  if((v=g("eReden"))!==undefined) window.__edit.reden=v;
+}
+function editProjectChange(){
+  captureEdit();
+  var p=projectById(window.__edit.projectId)||OVERIG; var bestaat=false;
+  projectFases(p).forEach(function(f){ f.activiteiten.forEach(function(a){ if(actKey(f.naam,a)===window.__edit.actKey) bestaat=true; }); });
+  if(!bestaat){ var f0=projectFases(p)[0]; window.__edit.actKey=actKey(f0.naam, f0.activiteiten[0]); }
+  renderEditModal();
+}
+function renderEditModal(){
+  var e=window.__edit, p=projectById(e.projectId)||OVERIG;
+  var namen=STORE.medewerkers.map(function(m){return m.naam;});
+  if(e.medewerker && namen.indexOf(e.medewerker)<0) namen.push(e.medewerker);
+  namen.sort();
+  var mwOpts=namen.map(function(n){return '<option'+(n===e.medewerker?" selected":"")+'>'+esc(n)+'</option>';}).join("");
+  var projOpts=STORE.projecten.slice().sort(function(a,b){return a.naam.localeCompare(b.naam);}).map(function(pp){return '<option value="'+pp.id+'"'+(pp.id===e.projectId?" selected":"")+'>'+esc(pp.naam)+'</option>';}).join("");
+  projOpts+='<option value="overig"'+(e.projectId==="overig"?" selected":"")+'>'+esc(OVERIG.naam)+'</option>';
+  var actOpts=""; projectFases(p).forEach(function(f){ f.activiteiten.forEach(function(a){ var k=actKey(f.naam,a); actOpts+='<option value="'+esc(k)+'"'+(k===e.actKey?" selected":"")+'>'+esc(k)+'</option>'; }); });
+  var redenOpts='<option value="">— geen meerwerk —</option>'+MEERWERK_REDENEN.map(function(x){return '<option'+(x===e.reden?" selected":"")+'>'+esc(x)+'</option>';}).join("");
+  var h='<h3>Urenregel aanpassen</h3>';
+  h+='<label class="fld" style="margin-top:0;">Medewerker</label><select id="eMw">'+mwOpts+'</select>';
+  h+='<label class="fld">Project</label><select id="eProj" onchange="editProjectChange()">'+projOpts+'</select>';
+  h+='<label class="fld">Activiteit (fase › activiteit)</label><select id="eAct">'+actOpts+'</select>';
+  h+='<div class="grid2"><div><label class="fld">Datum</label><input type="date" id="eDatum" value="'+esc(e.datum)+'"></div>'+
+     '<div><label class="fld">Uren</label><input type="text" id="eUren" inputmode="decimal" value="'+esc(e.uren)+'"></div></div>';
+  h+='<label class="fld">Meerwerk</label><select id="eReden">'+redenOpts+'</select>';
+  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="bewaarRegel()">Opslaan</button>';
+  h+='<div class="grid2" style="margin-top:8px;"><button class="btn btn-line" onclick="closeModal()">Annuleren</button>'+
+     '<button class="btn btn-line" style="color:var(--err);border-color:var(--err)" onclick="verwijderRegel()">Verwijderen</button></div>';
+  openModal(h);
+}
+function bewaarRegel(){
+  captureEdit(); var e=window.__edit;
+  var uren=parseFloat(String(e.uren).replace(",","."))||0;
+  var orig=STORE.tijdregels.find(function(x){return x.id===e.id;});
+  var od=orig?new Date(orig.start):new Date();
+  var pr=(e.datum||vandaagISO()).split("-");
+  var start=new Date(parseInt(pr[0],10), parseInt(pr[1],10)-1, parseInt(pr[2],10), od.getHours(), od.getMinutes(), 0, 0).getTime();
+  var stop=start+Math.round(uren*3600000);
+  var parts=e.actKey.split(" › ");
+  DB.update("tijdregels", e.id, { medewerker:e.medewerker, projectId:e.projectId, fase:parts[0], activiteit:parts[1],
+    start:start, stop:stop, pauzes:[], pauseStart:null, status:"klaar", meerwerk:!!e.reden, meerwerkReden:e.reden||"" });
+  closeModal(); toast("Urenregel aangepast ✓");
+}
+function verwijderRegel(){
+  if(confirm("Deze urenregel definitief verwijderen?")){ DB.remove("tijdregels", window.__edit.id); closeModal(); toast("Urenregel verwijderd"); }
+}
 function beheerData(){
   var h='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Back-up</div>'+
     '<p class="muted" style="margin-top:0;">Download of laad alle data (projecten, uren, ritten) als bestand.</p>'+
