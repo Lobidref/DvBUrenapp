@@ -308,6 +308,8 @@ var MAIL_ONTVANGER = "ferdi@brasseriemirell.nl";
 <!-- Firebase SDK (compat) — alleen gebruikt als FIREBASE_CONFIG is ingevuld -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<!-- SheetJS voor Excel-export (Beheer > Data) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <script>
 /* ====================================================================
@@ -890,6 +892,9 @@ function beheerData(){
     '<div class="grid2"><button class="btn btn-line" onclick="exportJson()">⬇ Download back-up</button>'+
     '<button class="btn btn-line" onclick="document.getElementById(\'impFile\').click()">⬆ Laad back-up</button></div>'+
     '<input type="file" id="impFile" accept="application/json" hidden onchange="importJson(this)"></div>';
+  h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Excel-export</div>'+
+    '<p class="muted" style="margin-top:0;">Download alle uren als Excel-bestand met overzichtstabbladen (urenregels, per project, begroot vs werkelijk, per medewerker, ritten).</p>'+
+    '<button class="btn btn-wood" onclick="exportExcel()">⬇ Download Excel</button></div>';
   h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Overzicht mailen</div>'+
     '<p class="muted" style="margin-top:0;">Stuur een samenvatting van alle projecten (begroot vs werkelijk, marge) naar '+esc(MAIL_ONTVANGER)+'.</p>'+
     '<button class="btn btn-wood" onclick="mailOverzicht()">✉ Mail projectoverzicht</button></div>';
@@ -901,6 +906,52 @@ function exportJson(){
   var data={}; COLLECTIES.forEach(function(c){data[c]=STORE[c];});
   var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="dvb-uren-backup-"+vandaagISO()+".json"; a.click();
+}
+function r2(n){ return Math.round((n||0)*100)/100; }
+function exportExcel(){
+  if(typeof XLSX==="undefined"){ toast("Excel-module laadt nog — probeer zo nog eens"); return; }
+  var wb=XLSX.utils.book_new();
+  // 1. Urenregels (detail)
+  var rows=[["Datum","Medewerker","Project","Fase","Activiteit","Uren","Meerwerk","Reden","Start","Stop"]];
+  STORE.tijdregels.filter(function(r){return r.status==="klaar";}).sort(function(a,b){return a.start-b.start;}).forEach(function(r){
+    var p=projectById(r.projectId)||{naam:r.projectId};
+    rows.push([ new Date(r.start).toLocaleDateString("nl-NL"), r.medewerker, p.naam, r.fase, r.activiteit,
+      r2(urenDec(regelMs(r))), r.meerwerk?"ja":"nee", r.meerwerkReden||"",
+      new Date(r.start).toLocaleString("nl-NL"), r.stop?new Date(r.stop).toLocaleString("nl-NL"):"" ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Urenregels");
+  // 2. Per project
+  var pr=[["Project","Klant","Status","Begroot (u)","Werkelijk (u)","Verschil (u)","Reistijd (u)","Meerwerk (u)","Km","Materiaal EUR","Uurtarief EUR","Offerte EUR","Arbeidskosten EUR","Marge EUR"]];
+  STORE.projecten.forEach(function(p){
+    var rg=regelsVanProject(p.id); var werk=0,reis=0,mw=0; rg.forEach(function(r){var u=urenDec(regelMs(r));werk+=u;if(r.activiteit===REISTIJD_ACT)reis+=u;if(r.meerwerk)mw+=u;});
+    var bud=0; Object.keys(p.budget||{}).forEach(function(k){bud+=parseFloat(p.budget[k])||0;});
+    var km=STORE.ritten.filter(function(r){return r.projectId===p.id;}).reduce(function(s,r){return s+(r.km||0);},0);
+    var tarief=parseFloat(p.uurtarief)||0,mat=parseFloat(p.materiaalkosten)||0,off=parseFloat(p.offertebedrag)||0,arbeid=werk*tarief;
+    pr.push([p.naam,p.klant||"",p.status||"actief",r2(bud),r2(werk),r2(werk-bud),r2(reis),r2(mw),km,mat,tarief,off,Math.round(arbeid),Math.round(off-arbeid-mat)]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pr), "Per project");
+  // 3. Begroot vs werkelijk per activiteit
+  var pa=[["Project","Fase > Activiteit","Begroot (u)","Werkelijk (u)","Verschil (u)"]];
+  STORE.projecten.forEach(function(p){
+    var werk=urenPerActiviteit(regelsVanProject(p.id)); var budget=p.budget||{}; var keys={};
+    Object.keys(budget).forEach(function(k){keys[k]=1;}); Object.keys(werk).forEach(function(k){keys[k]=1;});
+    Object.keys(keys).sort().forEach(function(k){ var b=parseFloat(budget[k])||0,w=werk[k]||0; pa.push([p.naam,k,r2(b),r2(w),r2(w-b)]); });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pa), "Begroot vs werkelijk");
+  // 4. Per medewerker
+  var mwa=[["Medewerker","Totaal (u)","Productief (u)","Indirect (u)","Ziekte (u)","Verlof (u)"]]; var perMw={};
+  STORE.tijdregels.filter(function(r){return r.status==="klaar";}).forEach(function(r){
+    var m=r.medewerker||"?"; if(!perMw[m])perMw[m]={prod:0,ind:0,z:0,v:0}; var u=urenDec(regelMs(r));
+    if(r.projectId==="overig"){ if(/ziekte/i.test(r.activiteit))perMw[m].z+=u; else if(/verlof|vakantie/i.test(r.activiteit))perMw[m].v+=u; else perMw[m].ind+=u; } else perMw[m].prod+=u;
+  });
+  Object.keys(perMw).sort().forEach(function(m){var d=perMw[m];mwa.push([m,r2(d.prod+d.ind+d.z+d.v),r2(d.prod),r2(d.ind),r2(d.z),r2(d.v)]);});
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mwa), "Per medewerker");
+  // 5. Ritten
+  var rt=[["Datum","Bestuurder","Bus","Project","Beginstand","Eindstand","Km"]];
+  STORE.ritten.slice().sort(function(a,b){return (a.datum||"").localeCompare(b.datum||"");}).forEach(function(r){var p=projectById(r.projectId)||{naam:""};rt.push([r.datum,r.bestuurder,r.bus,p.naam,r.beginstand||0,r.eindstand||0,r.km||0]);});
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rt), "Ritten");
+  XLSX.writeFile(wb, "dvb-uren-"+vandaagISO()+".xlsx");
+  toast("Excel gedownload ✓");
 }
 function importJson(input){
   var f=input.files[0]; if(!f) return; var rd=new FileReader();
