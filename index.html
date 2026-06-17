@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DVB Design — Urenregistratie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fjalla+One&family=Roboto+Slab:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #FAF9F6;
+    --bg-2: #F2EFE9;
+    --card: #FFFFFF;
+    --ink: #3D3B3C;
+    --ink-soft: #6E6A66;
+    --line: #DAD4CB;
+    --line-soft: #E7E2D9;
+    --wood: #A9794C;
+    --wood-soft: #C39A6E;
+    --wood-bg: #F3E9DC;
+    --ok: #5E7C57;
+    --ok-bg: #EEF3EA;
+    --err: #B4522E;
+    --err-bg: #F7E9E3;
+    --warn: #B07B26;
+    --warn-bg: #F6EDDC;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'Roboto Slab', Georgia, serif; font-weight: 400;
+    font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    padding-bottom: 78px;
+  }
+  .bg-layer {
+    position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(120% 70% at 50% -10%, rgba(169,121,76,0.06), transparent 60%),
+      linear-gradient(180deg, #FBFAF7 0%, var(--bg) 60%, #F6F3EE 100%);
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 22px 16px 40px; }
+
+  /* Header */
+  header { text-align: center; padding: 6px 0 2px; }
+  header .logo-img { width: clamp(130px, 42%, 190px); height: auto; display: block; margin: 0 auto; }
+  header h1 {
+    font-family: 'Fjalla One', sans-serif; font-weight: 400; text-transform: uppercase;
+    letter-spacing: 3px; font-size: clamp(1.1rem, 5vw, 1.4rem); color: var(--ink); margin: 12px 0 4px;
+  }
+  header .subtitle {
+    font-family: 'Fjalla One', sans-serif; letter-spacing: 2px; text-transform: uppercase;
+    font-size: 0.72rem; color: var(--wood);
+  }
+  .xdiv { display:flex; align-items:center; justify-content:center; gap:14px; margin:18px 0 8px; }
+  .xdiv::before, .xdiv::after { content:""; height:1px; background:var(--line); flex:1; max-width:220px; }
+  .xdiv svg { width:20px; height:20px; flex:none; }
+
+  /* Sync status */
+  .sync-bar { display:flex; align-items:center; justify-content:center; gap:8px; font-family:'Fjalla One',sans-serif;
+    letter-spacing:1px; text-transform:uppercase; font-size:0.66rem; color:var(--ink-soft); margin: 6px 0 14px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ink-soft); flex:none; }
+  .dot.online { background:var(--ok); }
+  .dot.local { background:var(--wood); }
+
+  /* Tabs */
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+    display: flex; background: var(--card); border-top: 1px solid var(--line);
+    box-shadow: 0 -2px 14px rgba(61,59,60,0.06);
+  }
+  .tabbar button {
+    flex: 1; background: none; border: none; cursor: pointer;
+    padding: 10px 4px 8px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--ink-soft); font-family: 'Fjalla One', sans-serif; letter-spacing: 0.5px;
+    text-transform: uppercase; font-size: 0.62rem; transition: color .12s;
+  }
+  .tabbar button svg { width: 23px; height: 23px; }
+  .tabbar button.on { color: var(--wood); }
+  .tabbar button.on svg { color: var(--wood); }
+
+  .view { display: none; }
+  .view.on { display: block; animation: fade .18s ease; }
+  @keyframes fade { from { opacity:0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+
+  /* Generic */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 16px; margin-bottom: 14px; }
+  .cat-title {
+    font-family: 'Fjalla One', sans-serif; text-transform: uppercase; letter-spacing: 2px;
+    font-size: 0.92rem; color: var(--ink); display: flex; align-items: center; gap: 10px;
+    padding-bottom: 8px; margin: 4px 0 14px; border-bottom: 1px solid var(--ink);
+  }
+  .cat-title .ic { width: 18px; height: 18px; flex:none; color: var(--wood); }
+  label.fld { display:block; font-family:'Fjalla One',sans-serif; letter-spacing:1px;
+    text-transform: uppercase; font-size: 0.74rem; color: var(--ink); margin: 14px 0 7px; }
+  label.fld .req { color: var(--wood); }
+  input[type=text], input[type=number], input[type=date], select, textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px;
+    font-family: 'Roboto Slab', serif; font-size: 1rem; color: var(--ink); background: #fff;
+  }
+  textarea { min-height: 70px; resize: vertical; }
+  input::placeholder, textarea::placeholder { color:#A8A29A; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--wood-soft); outline-offset: 1px; border-color: var(--wood-soft); }
+  select {
+    -webkit-appearance:none; appearance:none; cursor:pointer; padding-right: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9'%3E%3Cpath d='M1 1l6 6 6-6' stroke='%23A9794C' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position: right 14px center;
+  }
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border:none; border-radius:6px; cursor:pointer; font-family:'Fjalla One',sans-serif;
+    letter-spacing:1.5px; text-transform:uppercase; transition: background .12s, transform .05s;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-ink { background: var(--ink); color:#fff; padding:16px; font-size:1rem; width:100%; }
+  .btn-ink:hover { background:#2c2a2b; }
+  .btn-wood { background: var(--wood-bg); border:1px solid var(--wood-soft); color: var(--wood); padding:12px 16px; font-size:0.8rem; }
+  .btn-wood:hover { background:#EBDDCB; }
+  .btn-line { background:#fff; border:1px solid var(--line); color: var(--ink); padding:11px 14px; font-size:0.78rem; }
+  .btn-line:hover { border-color: var(--wood-soft); }
+  .btn:disabled { opacity:.5; cursor:default; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .muted { color: var(--ink-soft); font-size: 0.85rem; }
+  .pill { display:inline-block; font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase;
+    font-size:0.62rem; padding:3px 9px; border-radius:999px; background:var(--wood-bg); color:var(--wood); }
+  .pill.gray { background:var(--bg-2); color:var(--ink-soft); }
+  .pill.red { background:var(--err-bg); color:var(--err); }
+  .pill.green { background:var(--ok-bg); color:var(--ok); }
+
+  /* KLOK */
+  .who-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:10px; }
+  .who {
+    background: var(--card); border:1px solid var(--line-soft); border-left:3px solid transparent;
+    border-radius:6px; padding:18px 10px; text-align:center; cursor:pointer; transition:.12s;
+    font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:0.95rem; color:var(--ink);
+  }
+  .who:hover { border-color: var(--wood-soft); }
+  .who.busy { border-left-color: var(--ok); background:#FBFDFA; }
+  .who .st { display:block; font-size:0.6rem; letter-spacing:0.5px; margin-top:6px; color:var(--ink-soft); }
+  .who.busy .st { color: var(--ok); }
+  .who-avatar { width:46px; height:46px; border-radius:50%; background:var(--wood-bg); color:var(--wood);
+    display:grid; place-items:center; margin:0 auto 8px; font-size:1.2rem; border:1px solid var(--wood-soft); }
+
+  .picker-list { display:flex; flex-direction:column; gap:8px; }
+  .opt {
+    display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--line-soft);
+    border-left:3px solid transparent; border-radius:5px; padding:14px; cursor:pointer; transition:.12s;
+  }
+  .opt:hover { border-color: var(--wood-soft); }
+  .opt.on { border-left-color: var(--wood); background:#FFFDFA; border-color:var(--line); }
+  .opt .nm { flex:1; font-weight:500; }
+  .opt .sub { font-size:0.76rem; color:var(--ink-soft); }
+  .opt .chev { color: var(--wood); width:16px; height:16px; flex:none; }
+
+  .timer-box { text-align:center; padding:8px 0 2px; }
+  .timer-clock { font-family:'Fjalla One',sans-serif; font-size: clamp(2.6rem, 16vw, 4.4rem); letter-spacing:2px; color:var(--ink); line-height:1; }
+  .timer-clock.paused { color: var(--warn); }
+  .timer-meta { font-size:0.92rem; color:var(--ink-soft); margin-top:8px; }
+  .timer-meta b { color: var(--ink); font-weight:600; }
+  .timer-actions { display:flex; gap:10px; margin-top:18px; }
+  .timer-actions .btn { flex:1; padding:18px 10px; font-size:0.95rem; }
+  .btn-start { background: var(--ok); color:#fff; }
+  .btn-stop { background: var(--err); color:#fff; }
+  .btn-pause { background: var(--warn-bg); color: var(--warn); border:1px solid var(--warn); }
+  .crumb { font-size:0.8rem; color:var(--ink-soft); margin-bottom:4px; }
+  .crumb b { color: var(--wood); font-family:'Fjalla One',sans-serif; letter-spacing:0.5px; }
+  .back-link { display:inline-flex; align-items:center; gap:6px; background:none; border:none; color:var(--wood);
+    cursor:pointer; font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:0.72rem; padding:6px 0; margin-bottom:6px; }
+
+  /* Tables */
+  .tbl { width:100%; border-collapse:collapse; font-size:0.9rem; }
+  .tbl th { font-family:'Fjalla One',sans-serif; letter-spacing:0.5px; text-transform:uppercase; font-size:0.66rem;
+    color:var(--ink-soft); text-align:left; padding:8px 8px; border-bottom:1px solid var(--line); }
+  .tbl td { padding:9px 8px; border-bottom:1px solid var(--line-soft); }
+  .tbl td.num, .tbl th.num { text-align:right; font-variant-numeric: tabular-nums; }
+  .tbl tr.total td { font-weight:700; border-top:1px solid var(--ink); border-bottom:none; }
+  .bar-wrap { background:var(--bg-2); border-radius:999px; height:7px; overflow:hidden; margin-top:4px; }
+  .bar { height:100%; background:var(--wood); border-radius:999px; }
+  .bar.over { background:var(--err); }
+  .bar.ok { background:var(--ok); }
+
+  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px; }
+  .stat { background:var(--card); border:1px solid var(--line); border-radius:6px; padding:14px; }
+  .stat .lab { font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:0.62rem; color:var(--ink-soft); }
+  .stat .val { font-family:'Fjalla One',sans-serif; font-size:1.6rem; color:var(--ink); margin-top:4px; }
+  .stat .val.wood { color:var(--wood); }
+  .stat .val.ok { color:var(--ok); }
+  .stat .val.err { color:var(--err); }
+
+  .seg { display:flex; gap:6px; background:var(--bg-2); padding:4px; border-radius:8px; margin-bottom:14px; }
+  .seg button { flex:1; background:none; border:none; border-radius:6px; padding:9px 6px; cursor:pointer;
+    font-family:'Fjalla One',sans-serif; letter-spacing:0.5px; text-transform:uppercase; font-size:0.68rem; color:var(--ink-soft); }
+  .seg button.on { background:#fff; color:var(--wood); box-shadow:0 1px 4px rgba(61,59,60,0.08); }
+
+  .row-line { display:flex; align-items:center; gap:10px; padding:11px 0; border-bottom:1px solid var(--line-soft); }
+  .row-line:last-child { border-bottom:none; }
+  .row-line .grow { flex:1; min-width:0; }
+  .row-line .grow .t1 { font-weight:500; }
+  .row-line .grow .t2 { font-size:0.76rem; color:var(--ink-soft); }
+  .row-line .rm { background:none; border:none; color:var(--err); font-size:1.3rem; cursor:pointer; line-height:1; padding:0 4px; }
+  .row-line .val { font-variant-numeric:tabular-nums; font-weight:600; }
+
+  .empty { text-align:center; color:var(--ink-soft); font-size:0.9rem; padding:24px 10px; }
+  .toast { position:fixed; left:50%; bottom:92px; transform:translateX(-50%); background:var(--ink); color:#fff;
+    padding:12px 20px; border-radius:8px; font-size:0.9rem; z-index:100; opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(-4px); }
+
+  .radio-list { display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .radio-opt { display:flex; align-items:center; gap:10px; border:1px solid var(--line-soft); border-radius:5px; padding:12px; cursor:pointer; }
+  .radio-opt.on { border-color:var(--wood); background:#FFFDFA; }
+  .radio-opt .rb { width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line); flex:none; display:grid; place-items:center; }
+  .radio-opt.on .rb { border-color:var(--wood); }
+  .radio-opt.on .rb::after { content:""; width:10px;height:10px;border-radius:50%;background:var(--wood); }
+
+  .modal-bg { position:fixed; inset:0; background:rgba(61,59,60,0.45); z-index:80; display:none; align-items:flex-end; justify-content:center; }
+  .modal-bg.show { display:flex; }
+  .modal { background:var(--bg); width:100%; max-width:760px; max-height:88vh; overflow-y:auto; border-radius:14px 14px 0 0; padding:20px 16px 28px; animation: up .2s ease; }
+  @keyframes up { from{transform:translateY(20px);opacity:.6;} to{transform:none;opacity:1;} }
+  .modal h3 { font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:1rem; margin:0 0 4px; }
+
+  details.proj-edit { border:1px solid var(--line); border-radius:6px; margin-bottom:10px; background:#fff; }
+  details.proj-edit summary { padding:13px 14px; cursor:pointer; font-weight:600; list-style:none; display:flex; align-items:center; justify-content:space-between; }
+  details.proj-edit summary::-webkit-details-marker { display:none; }
+  details.proj-edit .body { padding:0 14px 14px; }
+  .act-budget-row { display:flex; align-items:center; gap:10px; padding:7px 0; border-bottom:1px solid var(--line-soft); }
+  .act-budget-row .an { flex:1; font-size:0.9rem; }
+  .act-budget-row .fase-tag { font-size:0.6rem; color:var(--ink-soft); font-family:'Fjalla One',sans-serif; letter-spacing:0.5px; text-transform:uppercase; }
+  .act-budget-row input { width:84px; text-align:center; }
+  .fase-head { font-family:'Fjalla One',sans-serif; letter-spacing:1px; text-transform:uppercase; font-size:0.68rem; color:var(--wood); margin:12px 0 2px; }
+
+  footer { text-align:center; margin-top: 26px; font-family:'Fjalla One',sans-serif;
+    letter-spacing:1.5px; text-transform:uppercase; font-size:0.66rem; color:var(--ink-soft); }
+  @media (max-width:380px){ body{font-size:15px;} .wrap{padding:18px 12px 36px;} }
+</style>
+</head>
+<body>
+<div class="bg-layer"></div>
+<div class="wrap">
+  <header>
+    <img class="logo-img" src="data:image/png;base64,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8vbbbyebCyKRiAwfMUKm3/4zzweYuuNZpnuxE07peEryceLWrufWPxfs6ha4hsCGaw4fOizXXT8yEvmmCvzTgwflry++qByXR/uok/a8tUc2bdykrF61Spn8k0nK9u3bk6+1atXK86VHI9asfkJpbGhQlixerFSPGat8erClw9ipp50muUY5y0ZRFFm1cqX85NYfez7QTlN1PEuMdlZfV59c7w4dOoiISMeOLT3AEz3F1T3EUyefAQpBlThck7g1qEePHvKPf/xDREQaXmiQO375i0hqdbBdauvrIinLup95/rnn5Pnnnsv42qjRVbK6do0l6zameqyMvP56V8L/4Yceyvh8q1at5IG/LNRdp7Zt28rjq1dFRJpHAfuvunp5443maSvf3rtXxo8bpyxavNizFzbqEnbinnNNh7OuXUREpLyiPHmsfv755yIiEv+4pQr9lFNaSuBAobj8g2uOfNl8G88lqukN//bKK26tTkHatm0r42+60dKAdSussznxxBNlde0aQ+ukLlkOuuyyyNx5f4h07tIl+Vz847gsXvSIZ0vanTIMnqJuo47FYlk/qy5hM+kHrERgwzWJts1LBw2KJGZiOnLkiCxZvNizJ3IRkc5dusgFvS7QjG4WPfFEyTRvsl91P+cczW13Ipnnljaj8ppKzfKLW8yNR+6ksgED0vblPlXnszNUgd2+ffvk42fXrtVMDZp6rzlQCAIbrvn666+Tj/v07ZN8/Pe//d2N1THssssvk1/9+teR888/P/nc+zYMkemme+79feTue+6JtFOF0aaNhc2OdcWVV2pC8N133y3o+5ymHo71yquuSv5f1OObHzxwUDNiG7d0wUoENlzztdIS2OrpHN/cvTvj+71mwMCBmuV77v6d4zUDkTzuWTfzGfWF1BdffKHpeFWo1HvXW+Ux5nbaON151HFEsgwrqx4UZd2zzyrq3u5qXbu2zPd94MCBZFu2iMg1w64NTK0L3Edgwz0pJ2y/ddApGzAgWZUvIvLyyy85vg5t25q/Be6YY44x/N6fTJqkCZxn1z6T7a0FM7NeCccdd6xm+Zi25r8j2+92UvUUf+edd5KPU0vNZ5yhDuz9eY2zDhhBYMMzBl5yidurYNpFvS9OPj761VF5fMXjjpayTzjheM3y0a+Opr3nyBHtsKl9+/UzVepTX0ilTiNppWg0qlnONNxr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" alt="DVB Design">
+    <h1>Urenregistratie</h1>
+    <div class="subtitle">Projecten &middot; Uren &middot; Rendement</div>
+  </header>
+  <div class="xdiv">
+    <svg viewBox="0 0 40 40" fill="none" stroke="#A9794C" stroke-width="1.4"><path d="M5 5l30 30M35 5L5 35"/></svg>
+  </div>
+  <div class="sync-bar"><span class="dot" id="syncDot"></span><span id="syncTxt">Verbinden…</span></div>
+
+  <!-- ============ KLOK ============ -->
+  <section class="view on" id="view-klok"></section>
+  <!-- ============ KILOMETERS ============ -->
+  <section class="view" id="view-km"></section>
+  <!-- ============ DASHBOARD ============ -->
+  <section class="view" id="view-dash"></section>
+  <!-- ============ BEHEER ============ -->
+  <section class="view" id="view-beheer"></section>
+
+  <footer>DVB Design &middot; Interieurbouw &amp; Meubelmakerij &middot; De Lier</footer>
+</div>
+
+<nav class="tabbar">
+  <button data-view="klok" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Klok
+  </button>
+  <button data-view="km">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 13l2-5a2 2 0 012-1.5h10A2 2 0 0119 8l2 5M5 13h14v4a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1z" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="1"/><circle cx="16.5" cy="15.5" r="1"/></svg>
+    Kilometers
+  </button>
+  <button data-view="dash">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6" stroke-linecap="round"/></svg>
+    Dashboard
+  </button>
+  <button data-view="beheer">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 2h-5l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L3 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h5l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5a7 7 0 00.1-1z" stroke-linejoin="round"/></svg>
+    Beheer
+  </button>
+</nav>
+
+<div class="toast" id="toast"></div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modalBox"></div></div>
+
+<script>
+/* ====================================================================
+   DVB DESIGN — URENREGISTRATIE
+   Eén bestand, werkt op GitHub Pages. Data via Firebase Firestore
+   (gedeeld over alle apparaten) met automatische localStorage-fallback.
+   ==================================================================== */
+
+/* ====== 1. FIREBASE CONFIG ======
+   Vul hieronder de gegevens uit je gratis Firebase-project in.
+   Zolang dit leeg is, draait de app lokaal (localStorage) op dit apparaat.
+   Uitleg om dit in te vullen staat onderaan in het bestand (INSTALLATIE). */
+var FIREBASE_CONFIG = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+/* E-mailadres voor het versturen van overzichten (Beheer > Export). */
+var MAIL_ONTVANGER = "ferdi@brasseriemirell.nl";
+</script>
+
+<!-- Firebase SDK (compat) — alleen gebruikt als FIREBASE_CONFIG is ingevuld -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+/* ====================================================================
+   2. VASTE LIJSTEN
+   ==================================================================== */
+var FASES = [
+  { naam: "Ontwerp",          activiteiten: ["Klantgesprek","Inmeten","Ontwerpen","Revisies"] },
+  { naam: "Werkvoorbereiding", activiteiten: ["Technisch tekenwerk","Bestellen","Planning","Overleg"] },
+  { naam: "CNC",              activiteiten: ["Programmeren","Instellen","Frezen"] },
+  { naam: "Werkplaats",       activiteiten: ["Zagen","Assemblage","Schuren","Fineerwerk","Voorbereiding spuitwerk","Spuitwerk"] },
+  { naam: "Montage",          activiteiten: ["Laden","Reizen","Montage","Opleveren"] }
+];
+/* Niet-project tijd (telt niet als productief op een project) */
+var OVERIG = {
+  id: "overig", naam: "Overig / niet-project",
+  fases: [{ naam: "Indirect", activiteiten: ["Algemeen / werkplaats","Onderhoud machines","Intern overleg","Ziekte","Verlof / vakantie"] }]
+};
+var REISTIJD_ACT = "Reizen";
+var MEERWERK_REDENEN = ["Klantwijziging","Extra werkzaamheden","Fout in tekening","Productiefout","Wachten op materiaal","Leverancier vertraagd","Anders"];
+
+function actKey(fase, act){ return fase + " › " + act; }
+function alleActiviteiten(){
+  var out = [];
+  FASES.forEach(function(f){ f.activiteiten.forEach(function(a){ out.push({ fase:f.naam, act:a, key:actKey(f.naam,a) }); }); });
+  return out;
+}
+
+/* ====================================================================
+   3. HULPFUNCTIES (tijd & opmaak)
+   ==================================================================== */
+function pad(n){ return String(n).padStart(2,"0"); }
+function nowMs(){ return Date.now(); }
+function regelMs(r, t){
+  t = t || nowMs();
+  var eind = r.stop || t;
+  var pauze = 0;
+  (r.pauzes||[]).forEach(function(p){ pauze += (p.stop||t) - p.start; });
+  if (r.pauseStart) pauze += t - r.pauseStart;
+  return Math.max(0, eind - r.start - pauze);
+}
+function fmtKlok(ms){
+  var s = Math.floor(ms/1000); var h=Math.floor(s/3600); s-=h*3600; var m=Math.floor(s/60); s-=m*60;
+  return pad(h)+":"+pad(m)+":"+pad(s);
+}
+function urenDec(ms){ return ms/3600000; }
+function fmtUren(ms){
+  var u = urenDec(ms);
+  return (Math.round(u*10)/10).toLocaleString("nl-NL") + " u";
+}
+function fmtU(u){ return (Math.round(u*10)/10).toLocaleString("nl-NL"); }
+function fmtEuro(n){ return "€ " + (Math.round(n)||0).toLocaleString("nl-NL"); }
+function vandaagISO(){ var d=new Date(); return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function maandKey(ms){ var d=new Date(ms); return d.getFullYear()+"-"+pad(d.getMonth()+1); }
+function maandLabel(key){ var p=key.split("-"); var mn=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"]; return mn[parseInt(p[1],10)-1]+" "+p[0]; }
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+
+/* ====================================================================
+   4. DATALAAG — Firebase Firestore of localStorage
+   ==================================================================== */
+var COLLECTIES = ["medewerkers","bussen","projecten","tijdregels","ritten"];
+var STORE = { medewerkers:[], bussen:[], projecten:[], tijdregels:[], ritten:[] };
+var DB = null;
+
+function firebaseIngevuld(){ return FIREBASE_CONFIG && FIREBASE_CONFIG.projectId && FIREBASE_CONFIG.apiKey; }
+
+/* ---- LocalStorage adapter ---- */
+function LocalDB(){
+  var KEY = "dvb_uren_v1";
+  function load(){ try { var d=JSON.parse(localStorage.getItem(KEY)); if(d){ COLLECTIES.forEach(function(c){ STORE[c]=d[c]||[]; }); } } catch(e){} }
+  function save(){ try { localStorage.setItem(KEY, JSON.stringify(STORE)); } catch(e){} }
+  load();
+  return {
+    type: "local",
+    add: function(c,o){ if(!o.id) o.id=uid(); STORE[c].push(o); save(); render(); return Promise.resolve(o.id); },
+    update: function(c,id,patch){ var x=STORE[c].find(function(r){return r.id===id;}); if(x){ Object.assign(x,patch); save(); render(); } return Promise.resolve(); },
+    remove: function(c,id){ STORE[c]=STORE[c].filter(function(r){return r.id!==id;}); save(); render(); return Promise.resolve(); },
+    start: function(){ setSync("local"); render(); }
+  };
+}
+
+/* ---- Firebase adapter ---- */
+function FireDB(){
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var fs = firebase.firestore();
+  return {
+    type: "firebase",
+    add: function(c,o){ if(!o.id) o.id=uid(); return fs.collection(c).doc(o.id).set(o); },
+    update: function(c,id,patch){ return fs.collection(c).doc(id).set(patch,{merge:true}); },
+    remove: function(c,id){ return fs.collection(c).doc(id).delete(); },
+    start: function(){
+      var ready={};
+      COLLECTIES.forEach(function(c){
+        fs.collection(c).onSnapshot(function(snap){
+          var arr=[]; snap.forEach(function(d){ arr.push(d.data()); }); STORE[c]=arr;
+          ready[c]=true; setSync("online"); render();
+        }, function(err){ console.warn("Firestore "+c, err); setSync("local"); });
+      });
+    }
+  };
+}
+
+function setSync(mode){
+  var dot=document.getElementById("syncDot"), txt=document.getElementById("syncTxt");
+  dot.className = "dot " + (mode==="online"?"online":"local");
+  txt.textContent = mode==="online" ? "Live gesynchroniseerd" : "Lokaal op dit apparaat";
+}
+
+/* ====================================================================
+   5. UI-HELPERS (toast / modal / tabs)
+   ==================================================================== */
+var toastT;
+function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove("show"); },2200); }
+function openModal(html){ document.getElementById("modalBox").innerHTML=html; document.getElementById("modalBg").classList.add("show"); }
+function closeModal(){ document.getElementById("modalBg").classList.remove("show"); }
+document.getElementById("modalBg").addEventListener("click", function(e){ if(e.target===this) closeModal(); });
+
+var huidigeView = "klok";
+document.querySelectorAll(".tabbar button").forEach(function(b){
+  b.addEventListener("click", function(){
+    huidigeView=b.dataset.view;
+    document.querySelectorAll(".tabbar button").forEach(function(x){ x.classList.toggle("on", x===b); });
+    document.querySelectorAll(".view").forEach(function(v){ v.classList.toggle("on", v.id==="view-"+huidigeView); });
+    render();
+  });
+});
+
+/* ====================================================================
+   6. RENDER-DISPATCHER
+   ==================================================================== */
+function render(){
+  try {
+    if(huidigeView==="klok") renderKlok();
+    else if(huidigeView==="km") renderKm();
+    else if(huidigeView==="dash") renderDash();
+    else if(huidigeView==="beheer") renderBeheer();
+  } catch(e){ console.error(e); }
+}
+
+/* helpers voor data */
+function actieveMedewerkers(){ return STORE.medewerkers.filter(function(m){return m.actief!==false;}).sort(function(a,b){return a.naam.localeCompare(b.naam);}); }
+function lopendeRegel(medewerker){ return STORE.tijdregels.find(function(r){ return r.status==="lopend" && r.medewerker===medewerker; }); }
+function projectById(id){ if(id==="overig") return OVERIG; return STORE.projecten.find(function(p){return p.id===id;}); }
+function projectFases(p){ return (p && p.id==="overig") ? OVERIG.fases : FASES; }
+function actieveProjecten(){ return STORE.projecten.filter(function(p){return p.status!=="opgeleverd";}).sort(function(a,b){return a.naam.localeCompare(b.naam);}); }
+
+/* ====================================================================
+   7. KLOK
+   ==================================================================== */
+var klok = { medewerker:null, projectId:null, fase:null, activiteit:null };
+
+function renderKlok(){
+  var v=document.getElementById("view-klok");
+  if(!klok.medewerker){ klok.projectId=klok.fase=klok.activiteit=null; v.innerHTML=klokKies(); return; }
+  var r=lopendeRegel(klok.medewerker);
+  if(r){ v.innerHTML=klokLopend(r); return; }
+  v.innerHTML=klokStart();
+}
+
+function klokKies(){
+  var ms=actieveMedewerkers();
+  var h='<div class="cat-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0114 0" stroke-linecap="round"/></svg>Wie ben je?</div>';
+  if(!ms.length){ h+='<div class="empty">Nog geen medewerkers. Voeg ze toe bij <b>Beheer</b>.</div>'; return h; }
+  h+='<div class="who-grid">';
+  ms.forEach(function(m){
+    var r=lopendeRegel(m.naam);
+    var sub = r ? ("bezig · "+fmtKlok(regelMs(r))) : "vrij";
+    h+='<div class="who '+(r?"busy":"")+'" data-mw="'+esc(m.naam)+'">'+
+       '<div class="who-avatar">'+esc(m.naam.charAt(0).toUpperCase())+'</div>'+
+       esc(m.naam)+'<span class="st">'+sub+'</span></div>';
+  });
+  h+='</div>';
+  setTimeout(function(){
+    document.querySelectorAll("#view-klok .who").forEach(function(el){
+      el.addEventListener("click", function(){ klok.medewerker=el.dataset.mw; renderKlok(); });
+    });
+  },0);
+  return h;
+}
+
+function klokStart(){
+  var h='<button class="back-link" onclick="klokTerug()">‹ Andere medewerker</button>';
+  h+='<div class="cat-title" style="border:none;margin-bottom:6px;padding:0;">Hoi '+esc(klok.medewerker)+' 👋</div>';
+  // Stap 1: project
+  if(!klok.projectId){
+    h+='<p class="muted" style="margin:0 0 12px;">Waar ga je aan werken?</p><div class="picker-list">';
+    actieveProjecten().forEach(function(p){
+      h+=optRow(p.naam, p.klant||"", "klokPickProject('"+p.id+"')");
+    });
+    h+=optRow(OVERIG.naam, "ziekte, verlof, algemeen werk", "klokPickProject('overig')");
+    h+='</div>';
+    if(!actieveProjecten().length) h+='<p class="muted" style="margin-top:10px;">Nog geen projecten — maak ze aan bij <b>Beheer</b>.</p>';
+    return h;
+  }
+  var p=projectById(klok.projectId);
+  h+='<div class="crumb"><b>'+esc(p.naam)+'</b></div>';
+  // Stap 2: fase
+  if(!klok.fase){
+    h+='<button class="back-link" onclick="klok.projectId=null;renderKlok()">‹ Ander project</button>';
+    h+='<p class="muted" style="margin:0 0 12px;">Welke fase?</p><div class="picker-list">';
+    projectFases(p).forEach(function(f){ h+=optRow(f.naam, f.activiteiten.length+" activiteiten", "klokPickFase('"+esc(f.naam)+"')"); });
+    h+='</div>'; return h;
+  }
+  // Stap 3: activiteit
+  if(!klok.activiteit){
+    h+='<div class="crumb">fase: <b>'+esc(klok.fase)+'</b></div>';
+    h+='<button class="back-link" onclick="klok.fase=null;renderKlok()">‹ Andere fase</button>';
+    h+='<p class="muted" style="margin:0 0 12px;">Welke activiteit?</p><div class="picker-list">';
+    var f=projectFases(p).find(function(x){return x.naam===klok.fase;});
+    f.activiteiten.forEach(function(a){
+      var extra = a===REISTIJD_ACT ? "reistijd" : "";
+      h+=optRow(a, extra, "klokPickAct("+JSON.stringify(a).replace(/"/g,"&quot;")+")");
+    });
+    h+='</div>'; return h;
+  }
+  // Stap 4: start
+  h+='<div class="crumb">fase: <b>'+esc(klok.fase)+'</b> · activiteit: <b>'+esc(klok.activiteit)+'</b></div>';
+  h+='<button class="back-link" onclick="klok.activiteit=null;renderKlok()">‹ Andere activiteit</button>';
+  h+='<div class="card" style="text-align:center;margin-top:8px;">'+
+     '<div class="muted" style="margin-bottom:4px;">Klaar om te starten</div>'+
+     '<div style="font-family:\'Fjalla One\';font-size:1.1rem;letter-spacing:1px;text-transform:uppercase;">'+esc(p.naam)+'</div>'+
+     '<div class="muted" style="margin:2px 0 16px;">'+esc(klok.fase)+' › '+esc(klok.activiteit)+'</div>'+
+     '<button class="btn btn-start" style="width:100%;padding:20px;font-size:1.1rem;" onclick="klokStartTimer()">▶ Start</button></div>';
+  return h;
+}
+function optRow(naam, sub, onclick){
+  return '<div class="opt" onclick="'+onclick+'"><div class="nm">'+esc(naam)+(sub?'<div class="sub">'+esc(sub)+'</div>':'')+'</div>'+
+    '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>';
+}
+function klokTerug(){ klok.medewerker=null; renderKlok(); }
+function klokPickProject(id){ klok.projectId=id; klok.fase=null; klok.activiteit=null; renderKlok(); }
+function klokPickFase(f){ klok.fase=f; klok.activiteit=null; renderKlok(); }
+function klokPickAct(a){ klok.activiteit=a; renderKlok(); }
+function klokStartTimer(){
+  var r={ id:uid(), medewerker:klok.medewerker, projectId:klok.projectId, fase:klok.fase, activiteit:klok.activiteit,
+    start:nowMs(), stop:null, pauzes:[], pauseStart:null, meerwerk:false, meerwerkReden:"", status:"lopend" };
+  DB.add("tijdregels", r);
+  toast("Gestart — fijne klus!");
+  klok.projectId=klok.fase=klok.activiteit=null;
+  renderKlok();
+}
+
+function klokLopend(r){
+  var p=projectById(r.projectId)||{naam:"?"};
+  var paused=!!r.pauseStart;
+  var h='<button class="back-link" onclick="klokTerug()">‹ Andere medewerker</button>';
+  h+='<div class="card timer-box">';
+  h+='<div class="muted">'+esc(r.medewerker)+'</div>';
+  h+='<div class="timer-clock '+(paused?"paused":"")+'" id="liveClock" data-id="'+r.id+'">'+fmtKlok(regelMs(r))+'</div>';
+  h+='<div class="timer-meta"><b>'+esc(p.naam)+'</b><br>'+esc(r.fase)+' › '+esc(r.activiteit)+(r.meerwerk?' · <span class="pill red">meerwerk</span>':'')+'</div>';
+  h+='<div class="timer-actions">';
+  if(paused) h+='<button class="btn btn-pause" onclick="klokHervat()">▶ Verder</button>';
+  else h+='<button class="btn btn-pause" onclick="klokPauze()">⏸ Pauze</button>';
+  h+='<button class="btn btn-stop" onclick="klokStop()">⏹ Stop</button>';
+  h+='</div>';
+  h+='<div style="margin-top:14px;font-size:0.8rem;" class="muted">Gestart om '+new Date(r.start).toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"})+(paused?' · gepauzeerd':'')+'</div>';
+  h+='</div>';
+  return h;
+}
+function klokPauze(){ var r=lopendeRegel(klok.medewerker); if(r&&!r.pauseStart){ DB.update("tijdregels",r.id,{pauseStart:nowMs()}); renderKlok(); } }
+function klokHervat(){
+  var r=lopendeRegel(klok.medewerker);
+  if(r&&r.pauseStart){ var pz=(r.pauzes||[]).slice(); pz.push({start:r.pauseStart,stop:nowMs()}); DB.update("tijdregels",r.id,{pauzes:pz,pauseStart:null}); renderKlok(); }
+}
+function klokStop(){
+  var r=lopendeRegel(klok.medewerker); if(!r) return;
+  // pauze afsluiten indien actief
+  var pz=(r.pauzes||[]).slice();
+  if(r.pauseStart){ pz.push({start:r.pauseStart,stop:nowMs()}); }
+  var dur=regelMs(r);
+  openModal(stopModal(r, dur));
+  window.__stopRegel = { id:r.id, pz:pz };
+}
+function stopModal(r, dur){
+  var h='<h3>Klaar?</h3><p class="muted" style="margin:2px 0 14px;">'+fmtUren(dur)+' op '+esc((projectById(r.projectId)||{}).naam)+' › '+esc(r.activiteit)+'</p>';
+  h+='<label class="fld" style="margin-top:0;">Was dit (deels) meerwerk?</label>';
+  h+='<div class="radio-list" id="mwList">';
+  h+='<div class="radio-opt on" data-mw="" onclick="kiesMw(this)"><span class="rb"></span><span>Nee, normaal werk</span></div>';
+  MEERWERK_REDENEN.forEach(function(red){ h+='<div class="radio-opt" data-mw="'+esc(red)+'" onclick="kiesMw(this)"><span class="rb"></span><span>'+esc(red)+'</span></div>'; });
+  h+='</div>';
+  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="klokStopBevestig()">Opslaan</button>';
+  h+='<button class="btn btn-line" style="width:100%;margin-top:8px;" onclick="closeModal()">Annuleren</button>';
+  return h;
+}
+function kiesMw(el){ document.querySelectorAll("#mwList .radio-opt").forEach(function(x){x.classList.toggle("on",x===el);}); }
+function klokStopBevestig(){
+  var sel=document.querySelector("#mwList .radio-opt.on");
+  var reden = sel?sel.dataset.mw:"";
+  var s=window.__stopRegel;
+  DB.update("tijdregels", s.id, { stop:nowMs(), pauzes:s.pz, pauseStart:null, status:"klaar", meerwerk:!!reden, meerwerkReden:reden });
+  closeModal(); toast("Uren opgeslagen ✓"); renderKlok();
+}
+
+/* live klok tikt elke seconde */
+setInterval(function(){
+  var el=document.getElementById("liveClock");
+  if(el){ var r=STORE.tijdregels.find(function(x){return x.id===el.dataset.id;}); if(r&&r.status==="lopend") el.textContent=fmtKlok(regelMs(r)); }
+  // werk 'vrij/bezig' subteksten op het keuzescherm bij
+  document.querySelectorAll("#view-klok .who.busy").forEach(function(w){
+    var r=lopendeRegel(w.dataset.mw); if(r){ var st=w.querySelector(".st"); if(st) st.textContent="bezig · "+fmtKlok(regelMs(r)); }
+  });
+},1000);
+
+/* ====================================================================
+   8. KILOMETERS
+   ==================================================================== */
+function renderKm(){
+  var v=document.getElementById("view-km");
+  var h='<div class="cat-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 13l2-5a2 2 0 012-1.5h10A2 2 0 0119 8l2 5M5 13h14v4a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H8v1a1 1 0 01-1 1H6a1 1 0 01-1-1z" stroke-linejoin="round"/><circle cx="7.5" cy="15.5" r="1"/><circle cx="16.5" cy="15.5" r="1"/></svg>Ritregistratie</div>';
+  h+='<button class="btn btn-ink" onclick="ritModal()">+ Nieuwe rit</button>';
+  var ritten=STORE.ritten.slice().sort(function(a,b){return (b.datum+b.id).localeCompare(a.datum+a.id);});
+  if(!ritten.length){ h+='<div class="empty">Nog geen ritten geregistreerd.</div>'; v.innerHTML=h; return; }
+  var totaal=ritten.reduce(function(s,r){return s+(r.km||0);},0);
+  h+='<div class="stat-grid" style="margin-top:16px;"><div class="stat"><div class="lab">Totaal km</div><div class="val wood">'+totaal.toLocaleString("nl-NL")+'</div></div>'+
+     '<div class="stat"><div class="lab">Ritten</div><div class="val">'+ritten.length+'</div></div></div>';
+  h+='<div class="card">';
+  ritten.forEach(function(r){
+    var p=projectById(r.projectId);
+    h+='<div class="row-line"><div class="grow"><div class="t1">'+esc(p?p.naam:"—")+' · '+(r.km||0)+' km</div>'+
+       '<div class="t2">'+esc(r.datum)+' · '+esc(r.bestuurder||"?")+' · '+esc(r.bus||"?")+' · '+(r.beginstand||0)+'→'+(r.eindstand||0)+'</div></div>'+
+       '<button class="rm" onclick="DB.remove(\'ritten\',\''+r.id+'\')">×</button></div>';
+  });
+  h+='</div>';
+  v.innerHTML=h;
+}
+function ritModal(){
+  var mw=actieveMedewerkers(), bus=STORE.bussen, pr=actieveProjecten();
+  var h='<h3>Nieuwe rit</h3>';
+  h+='<label class="fld">Datum</label><input type="date" id="rDatum" value="'+vandaagISO()+'">';
+  h+='<label class="fld">Bestuurder</label><select id="rBest"><option value="" disabled selected hidden>Kies…</option>'+mw.map(function(m){return '<option>'+esc(m.naam)+'</option>';}).join("")+'</select>';
+  h+='<label class="fld">Bus</label><select id="rBus"><option value="" disabled selected hidden>Kies…</option>'+bus.map(function(b){return '<option>'+esc(b.naam)+'</option>';}).join("")+(bus.length?"":'<option value="Bus">Bus</option>')+'</select>';
+  h+='<label class="fld">Project</label><select id="rProj"><option value="" disabled selected hidden>Kies…</option>'+pr.map(function(p){return '<option value="'+p.id+'">'+esc(p.naam)+'</option>';}).join("")+'</select>';
+  h+='<div class="grid2"><div><label class="fld">Beginstand (km)</label><input type="number" id="rBegin" inputmode="numeric" placeholder="0"></div>'+
+     '<div><label class="fld">Eindstand (km)</label><input type="number" id="rEind" inputmode="numeric" placeholder="0"></div></div>';
+  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="ritOpslaan()">Rit opslaan</button>';
+  h+='<button class="btn btn-line" style="width:100%;margin-top:8px;" onclick="closeModal()">Annuleren</button>';
+  openModal(h);
+}
+function ritOpslaan(){
+  var begin=parseFloat(document.getElementById("rBegin").value)||0;
+  var eind=parseFloat(document.getElementById("rEind").value)||0;
+  var proj=document.getElementById("rProj").value;
+  if(!proj){ toast("Kies een project"); return; }
+  var km=Math.max(0, eind-begin);
+  DB.add("ritten", { id:uid(), datum:document.getElementById("rDatum").value||vandaagISO(),
+    bestuurder:document.getElementById("rBest").value, bus:document.getElementById("rBus").value,
+    projectId:proj, beginstand:begin, eindstand:eind, km:km });
+  closeModal(); toast(km+" km opgeslagen ✓");
+}
+
+/* ====================================================================
+   9. DASHBOARD
+   ==================================================================== */
+var dashTab="project", dashProject=null;
+function renderDash(){
+  var v=document.getElementById("view-dash");
+  var h='<div class="cat-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 16v-4M12 16V8M16 16v-6" stroke-linecap="round"/></svg>Dashboard</div>';
+  h+='<div class="seg"><button class="'+(dashTab==="project"?"on":"")+'" onclick="dashTab=\'project\';renderDash()">Per project</button>'+
+     '<button class="'+(dashTab==="mw"?"on":"")+'" onclick="dashTab=\'mw\';renderDash()">Per medewerker</button>'+
+     '<button class="'+(dashTab==="maand"?"on":"")+'" onclick="dashTab=\'maand\';renderDash()">Per maand</button></div>';
+  if(dashTab==="project") h+=dashProjectView();
+  else if(dashTab==="mw") h+=dashMwView();
+  else h+=dashMaandView();
+  v.innerHTML=h;
+}
+
+function regelsVanProject(id){ return STORE.tijdregels.filter(function(r){return r.projectId===id && r.status==="klaar";}); }
+function urenPerActiviteit(regels){
+  var m={}; regels.forEach(function(r){ var k=actKey(r.fase,r.activiteit); m[k]=(m[k]||0)+urenDec(regelMs(r)); }); return m;
+}
+
+function dashProjectView(){
+  var alle=STORE.projecten.slice().sort(function(a,b){return a.naam.localeCompare(b.naam);});
+  if(!alle.length) return '<div class="empty">Nog geen projecten. Maak ze aan bij <b>Beheer</b>.</div>';
+  if(!dashProject || !projectById(dashProject)) dashProject=alle[0].id;
+  var h='<label class="fld" style="margin-top:0;">Project</label><select onchange="dashProject=this.value;renderDash()">';
+  alle.forEach(function(p){ h+='<option value="'+p.id+'" '+(p.id===dashProject?"selected":"")+'>'+esc(p.naam)+(p.status==="opgeleverd"?" (opgeleverd)":"")+'</option>'; });
+  h+='</select>';
+  var p=projectById(dashProject);
+  var regels=regelsVanProject(p.id);
+  var werk=urenPerActiviteit(regels);
+  var budget=p.budget||{};
+  var totBudget=0, totWerk=0, reistijd=0, meerwerkU=0;
+  regels.forEach(function(r){ var u=urenDec(regelMs(r)); totWerk+=u; if(r.activiteit===REISTIJD_ACT) reistijd+=u; if(r.meerwerk) meerwerkU+=u; });
+  Object.keys(budget).forEach(function(k){ totBudget+=(parseFloat(budget[k])||0); });
+  var km=STORE.ritten.filter(function(r){return r.projectId===p.id;}).reduce(function(s,r){return s+(r.km||0);},0);
+  var tarief=parseFloat(p.uurtarief)||0, mat=parseFloat(p.materiaalkosten)||0, offerte=parseFloat(p.offertebedrag)||0;
+  var arbeid=totWerk*tarief;
+  var marge=offerte - arbeid - mat;
+
+  h+='<div class="stat-grid" style="margin-top:16px;">';
+  h+='<div class="stat"><div class="lab">Begroot</div><div class="val">'+fmtU(totBudget)+' u</div></div>';
+  h+='<div class="stat"><div class="lab">Werkelijk</div><div class="val '+(totWerk>totBudget&&totBudget>0?"err":"wood")+'">'+fmtU(totWerk)+' u</div></div>';
+  h+='<div class="stat"><div class="lab">Verschil</div><div class="val '+(totWerk>totBudget&&totBudget>0?"err":"ok")+'">'+(totWerk-totBudget>=0?"+":"")+fmtU(totWerk-totBudget)+' u</div></div>';
+  if(offerte>0) h+='<div class="stat"><div class="lab">Marge (indicatie)</div><div class="val '+(marge>=0?"ok":"err")+'">'+fmtEuro(marge)+'</div></div>';
+  h+='</div>';
+
+  // verzamel alle activiteiten die budget of werk hebben
+  var keys={}; Object.keys(budget).forEach(function(k){if((parseFloat(budget[k])||0)>0)keys[k]=1;}); Object.keys(werk).forEach(function(k){keys[k]=1;});
+  var rijen=Object.keys(keys).sort();
+  h+='<div class="card"><table class="tbl"><thead><tr><th>Activiteit</th><th class="num">Begroot</th><th class="num">Werkelijk</th><th class="num">Δ</th></tr></thead><tbody>';
+  if(!rijen.length) h+='<tr><td colspan="4" class="muted" style="text-align:center;">Nog geen uren of begroting.</td></tr>';
+  rijen.forEach(function(k){
+    var b=parseFloat(budget[k])||0, w=werk[k]||0; var over=b>0&&w>b;
+    var pct = b>0 ? Math.min(100, w/b*100) : (w>0?100:0);
+    h+='<tr><td>'+esc(k)+'<div class="bar-wrap"><div class="bar '+(over?"over":(b>0?"ok":""))+'" style="width:'+pct+'%"></div></div></td>'+
+       '<td class="num">'+(b?fmtU(b):"—")+'</td><td class="num">'+fmtU(w)+'</td>'+
+       '<td class="num" style="color:'+(over?"var(--err)":"var(--ink-soft)")+'">'+(b?((w-b>=0?"+":"")+fmtU(w-b)):"—")+'</td></tr>';
+  });
+  h+='<tr class="total"><td>Totaal</td><td class="num">'+fmtU(totBudget)+'</td><td class="num">'+fmtU(totWerk)+'</td><td class="num">'+(totWerk-totBudget>=0?"+":"")+fmtU(totWerk-totBudget)+'</td></tr>';
+  h+='</tbody></table></div>';
+
+  // extra cijfers
+  h+='<div class="card"><table class="tbl"><tbody>';
+  h+=kv("Reistijd", fmtU(reistijd)+" u");
+  h+=kv("Kilometers", km.toLocaleString("nl-NL")+" km");
+  h+=kv("Meerwerk", fmtU(meerwerkU)+" u");
+  if(mat>0) h+=kv("Materiaalkosten", fmtEuro(mat));
+  if(tarief>0) h+=kv("Arbeidskosten ("+fmtEuro(tarief)+"/u × "+fmtU(totWerk)+" u)", fmtEuro(arbeid));
+  if(offerte>0) h+=kv("Offertebedrag", fmtEuro(offerte));
+  if(offerte>0) h+=kv("Marge (offerte − arbeid − materiaal)", fmtEuro(marge));
+  h+='</tbody></table></div>';
+
+  // meerwerk-redenen
+  var mwRegels=regels.filter(function(r){return r.meerwerk;});
+  if(mwRegels.length){
+    var redenen={}; mwRegels.forEach(function(r){ var rd=r.meerwerkReden||"Onbekend"; redenen[rd]=(redenen[rd]||0)+urenDec(regelMs(r)); });
+    h+='<div class="fase-head">Meerwerk uitgesplitst</div><div class="card"><table class="tbl"><tbody>';
+    Object.keys(redenen).forEach(function(rd){ h+=kv(rd, fmtU(redenen[rd])+" u"); });
+    h+='</tbody></table></div>';
+  }
+  return h;
+}
+function kv(k,v){ return '<tr><td>'+esc(k)+'</td><td class="num">'+esc(v)+'</td></tr>'; }
+
+function dashMwView(){
+  var klaar=STORE.tijdregels.filter(function(r){return r.status==="klaar";});
+  if(!klaar.length) return '<div class="empty">Nog geen afgeronde uren.</div>';
+  var perMw={};
+  klaar.forEach(function(r){
+    var m=r.medewerker||"?"; if(!perMw[m]) perMw[m]={prod:0,indirect:0,ziekte:0,verlof:0,acts:{}};
+    var u=urenDec(regelMs(r));
+    if(r.projectId==="overig"){
+      if(/ziekte/i.test(r.activiteit)) perMw[m].ziekte+=u;
+      else if(/verlof|vakantie/i.test(r.activiteit)) perMw[m].verlof+=u;
+      else perMw[m].indirect+=u;
+    } else perMw[m].prod+=u;
+    perMw[m].acts[r.activiteit]=(perMw[m].acts[r.activiteit]||0)+u;
+  });
+  var h='';
+  Object.keys(perMw).sort().forEach(function(m){
+    var d=perMw[m]; var tot=d.prod+d.indirect+d.ziekte+d.verlof;
+    var prodPct = tot>0 ? Math.round(d.prod/tot*100) : 0;
+    h+='<div class="fase-head">'+esc(m)+' — '+fmtU(tot)+' u totaal · '+prodPct+'% productief</div>';
+    h+='<div class="card"><div class="stat-grid" style="margin-bottom:6px;">';
+    h+='<div class="stat"><div class="lab">Productief</div><div class="val ok">'+fmtU(d.prod)+'</div></div>';
+    h+='<div class="stat"><div class="lab">Indirect</div><div class="val">'+fmtU(d.indirect)+'</div></div>';
+    h+='<div class="stat"><div class="lab">Ziekte</div><div class="val">'+fmtU(d.ziekte)+'</div></div>';
+    h+='<div class="stat"><div class="lab">Verlof</div><div class="val">'+fmtU(d.verlof)+'</div></div>';
+    h+='</div>';
+    h+='<table class="tbl"><thead><tr><th>Activiteit</th><th class="num">Uren</th></tr></thead><tbody>';
+    Object.keys(d.acts).sort(function(a,b){return d.acts[b]-d.acts[a];}).forEach(function(a){ h+=kv(a, fmtU(d.acts[a])+" u"); });
+    h+='</tbody></table></div>';
+  });
+  return h;
+}
+
+function dashMaandView(){
+  var klaar=STORE.tijdregels.filter(function(r){return r.status==="klaar";});
+  if(!klaar.length) return '<div class="empty">Nog geen afgeronde uren.</div>';
+  var perM={};
+  klaar.forEach(function(r){ var k=maandKey(r.start); if(!perM[k])perM[k]={tot:0,prod:0}; var u=urenDec(regelMs(r)); perM[k].tot+=u; if(r.projectId!=="overig")perM[k].prod+=u; });
+  // opgeleverde projecten per maand → omzet
+  var omzet={};
+  STORE.projecten.forEach(function(p){ if(p.status==="opgeleverd"&&p.opgeleverdOp&&p.offertebedrag){ var k=p.opgeleverdOp.slice(0,7); omzet[k]=(omzet[k]||0)+(parseFloat(p.offertebedrag)||0); } });
+  var keys=Object.keys(perM).sort().reverse();
+  var maxTot=Math.max.apply(null,keys.map(function(k){return perM[k].tot;}));
+  var h='<div class="card"><table class="tbl"><thead><tr><th>Maand</th><th class="num">Uren</th><th class="num">Productief</th><th class="num">Omzet</th></tr></thead><tbody>';
+  keys.forEach(function(k){
+    var d=perM[k]; var pct=Math.round(d.tot/maxTot*100);
+    h+='<tr><td>'+maandLabel(k)+'<div class="bar-wrap"><div class="bar" style="width:'+pct+'%"></div></div></td>'+
+       '<td class="num">'+fmtU(d.tot)+'</td><td class="num">'+fmtU(d.prod)+'</td><td class="num">'+(omzet[k]?fmtEuro(omzet[k]):"—")+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<p class="muted">Omzet = offertebedrag van projecten die in die maand zijn opgeleverd. Markeer een project als opgeleverd bij <b>Beheer</b>.</p>';
+  return h;
+}
+
+/* ====================================================================
+   10. BEHEER
+   ==================================================================== */
+var beheerTab="projecten";
+function renderBeheer(){
+  var v=document.getElementById("view-beheer");
+  var h='<div class="cat-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 13a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V19a2 2 0 11-4 0 1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1A1.6 1.6 0 005 13 2 2 0 113 9a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H10a1.6 1.6 0 001-1.5V2a2 2 0 114 0 1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V8a1.6 1.6 0 001.5 1H22a2 2 0 110 4 1.6 1.6 0 00-1.5 1z" stroke-linejoin="round"/></svg>Beheer</div>';
+  h+='<div class="seg"><button class="'+(beheerTab==="projecten"?"on":"")+'" onclick="beheerTab=\'projecten\';renderBeheer()">Projecten</button>'+
+     '<button class="'+(beheerTab==="mw"?"on":"")+'" onclick="beheerTab=\'mw\';renderBeheer()">Medewerkers</button>'+
+     '<button class="'+(beheerTab==="bus"?"on":"")+'" onclick="beheerTab=\'bus\';renderBeheer()">Bussen</button>'+
+     '<button class="'+(beheerTab==="data"?"on":"")+'" onclick="beheerTab=\'data\';renderBeheer()">Data</button></div>';
+  if(beheerTab==="projecten") h+=beheerProjecten();
+  else if(beheerTab==="mw") h+=beheerLijst("medewerkers","medewerker");
+  else if(beheerTab==="bus") h+=beheerLijst("bussen","bus");
+  else h+=beheerData();
+  v.innerHTML=h;
+}
+
+function beheerProjecten(){
+  var h='<button class="btn btn-ink" onclick="projModal()">+ Nieuw project</button>';
+  var pr=STORE.projecten.slice().sort(function(a,b){return a.naam.localeCompare(b.naam);});
+  if(!pr.length){ h+='<div class="empty">Nog geen projecten.</div>'; return h; }
+  h+='<div style="margin-top:14px;">';
+  pr.forEach(function(p){
+    var regels=regelsVanProject(p.id); var werk=0; regels.forEach(function(r){werk+=urenDec(regelMs(r));});
+    var bud=0; Object.keys(p.budget||{}).forEach(function(k){bud+=parseFloat(p.budget[k])||0;});
+    h+='<details class="proj-edit"><summary><span>'+esc(p.naam)+' '+(p.status==="opgeleverd"?'<span class="pill green">opgeleverd</span>':'<span class="pill">actief</span>')+'</span>'+
+       '<span class="muted" style="font-size:0.78rem;">'+fmtU(werk)+'/'+fmtU(bud)+' u</span></summary><div class="body">';
+    h+='<div class="muted" style="margin:4px 0 10px;">'+esc(p.klant||"—")+'</div>';
+    h+='<div class="grid2">'+
+       '<div><label class="fld" style="margin-top:6px;">Offertebedrag €</label><input type="number" value="'+(p.offertebedrag||"")+'" onchange="DB.update(\'projecten\',\''+p.id+'\',{offertebedrag:this.value})"></div>'+
+       '<div><label class="fld" style="margin-top:6px;">Materiaalkosten €</label><input type="number" value="'+(p.materiaalkosten||"")+'" onchange="DB.update(\'projecten\',\''+p.id+'\',{materiaalkosten:this.value})"></div></div>';
+    h+='<label class="fld">Uurtarief € (voor margeberekening)</label><input type="number" value="'+(p.uurtarief||"")+'" onchange="DB.update(\'projecten\',\''+p.id+'\',{uurtarief:this.value})">';
+    h+='<div class="fase-head" style="margin-top:14px;">Begrote uren per activiteit</div>';
+    FASES.forEach(function(f){
+      h+='<div class="act-budget-row" style="border:none;"><span class="fase-tag">'+esc(f.naam)+'</span></div>';
+      f.activiteiten.forEach(function(a){
+        var k=actKey(f.naam,a); var val=(p.budget&&p.budget[k])||"";
+        h+='<div class="act-budget-row"><span class="an">'+esc(a)+'</span><input type="number" inputmode="numeric" placeholder="0" value="'+val+'" onchange="setBudget(\''+p.id+'\',\''+esc(k).replace(/'/g,"")+'\',this.value)"></div>';
+      });
+    });
+    h+='<div class="grid2" style="margin-top:14px;">';
+    if(p.status==="opgeleverd") h+='<button class="btn btn-line" onclick="DB.update(\'projecten\',\''+p.id+'\',{status:\'actief\',opgeleverdOp:\'\'})">Heropenen</button>';
+    else h+='<button class="btn btn-wood" onclick="leverOp(\''+p.id+'\')">Markeer opgeleverd</button>';
+    h+='<button class="btn btn-line" style="color:var(--err);border-color:var(--err)" onclick="verwijderProject(\''+p.id+'\',\''+esc(p.naam).replace(/'/g,"")+'\')">Verwijder project</button>';
+    h+='</div></div></details>';
+  });
+  h+='</div>';
+  return h;
+}
+function setBudget(pid,key,val){
+  var p=projectById(pid); var b=Object.assign({},p.budget||{});
+  if(val===""||val==null) delete b[key]; else b[key]=parseFloat(val)||0;
+  DB.update("projecten",pid,{budget:b});
+}
+function leverOp(pid){ DB.update("projecten",pid,{status:"opgeleverd",opgeleverdOp:vandaagISO()}); toast("Project opgeleverd ✓"); }
+function verwijderProject(pid,naam){ if(confirm("Project \""+naam+"\" verwijderen? Geboekte uren blijven in de database maar zijn niet meer aan een project gekoppeld.")) DB.remove("projecten",pid); }
+function projModal(){
+  var h='<h3>Nieuw project</h3>';
+  h+='<label class="fld">Projectnaam</label><input type="text" id="pNaam" placeholder="Bijv. Familie Jansen — Keuken">';
+  h+='<label class="fld">Klant (optioneel)</label><input type="text" id="pKlant" placeholder="Naam klant / locatie">';
+  h+='<div class="grid2"><div><label class="fld">Offertebedrag €</label><input type="number" id="pOfferte" placeholder="0"></div>'+
+     '<div><label class="fld">Uurtarief €</label><input type="number" id="pTarief" placeholder="0"></div></div>';
+  h+='<button class="btn btn-ink" style="margin-top:16px;" onclick="projOpslaan()">Project aanmaken</button>';
+  h+='<button class="btn btn-line" style="width:100%;margin-top:8px;" onclick="closeModal()">Annuleren</button>';
+  openModal(h);
+}
+function projOpslaan(){
+  var naam=document.getElementById("pNaam").value.trim(); if(!naam){ toast("Geef het project een naam"); return; }
+  DB.add("projecten",{ id:uid(), naam:naam, klant:document.getElementById("pKlant").value.trim(),
+    status:"actief", offertebedrag:document.getElementById("pOfferte").value, uurtarief:document.getElementById("pTarief").value,
+    materiaalkosten:"", budget:{}, opgeleverdOp:"" });
+  closeModal(); toast("Project aangemaakt ✓");
+}
+
+function beheerLijst(coll, label){
+  var h='<div class="card"><label class="fld" style="margin-top:0;">Nieuwe '+label+' toevoegen</label>'+
+    '<div style="display:flex;gap:8px;"><input type="text" id="addNaam" placeholder="Naam'+(coll==="bussen"?" / kenteken":"")+'"><button class="btn btn-wood" onclick="lijstToevoegen(\''+coll+'\')">+ Voeg toe</button></div></div>';
+  var arr=STORE[coll].slice().sort(function(a,b){return a.naam.localeCompare(b.naam);});
+  if(!arr.length){ h+='<div class="empty">Nog geen '+label+'s.</div>'; return h; }
+  h+='<div class="card">';
+  arr.forEach(function(x){ h+='<div class="row-line"><div class="grow"><div class="t1">'+esc(x.naam)+'</div></div>'+
+    '<button class="rm" onclick="DB.remove(\''+coll+'\',\''+x.id+'\')">×</button></div>'; });
+  h+='</div>';
+  return h;
+}
+function lijstToevoegen(coll){ var i=document.getElementById("addNaam"); var n=i.value.trim(); if(!n){i.focus();return;} DB.add(coll,{id:uid(),naam:n,actief:true}); toast("Toegevoegd ✓"); }
+
+function beheerData(){
+  var h='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Back-up</div>'+
+    '<p class="muted" style="margin-top:0;">Download of laad alle data (projecten, uren, ritten) als bestand.</p>'+
+    '<div class="grid2"><button class="btn btn-line" onclick="exportJson()">⬇ Download back-up</button>'+
+    '<button class="btn btn-line" onclick="document.getElementById(\'impFile\').click()">⬆ Laad back-up</button></div>'+
+    '<input type="file" id="impFile" accept="application/json" hidden onchange="importJson(this)"></div>';
+  h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Overzicht mailen</div>'+
+    '<p class="muted" style="margin-top:0;">Stuur een samenvatting van alle projecten (begroot vs werkelijk, marge) naar '+esc(MAIL_ONTVANGER)+'.</p>'+
+    '<button class="btn btn-wood" onclick="mailOverzicht()">✉ Mail projectoverzicht</button></div>';
+  var sync = DB && DB.type==="firebase" ? "Live gesynchroniseerd via Firebase." : "Let op: data staat alléén op dit apparaat. Vul FIREBASE_CONFIG in het bestand in om te delen tussen apparaten (zie installatie-uitleg onderaan het bestand).";
+  h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Synchronisatie</div><p class="muted" style="margin:0;">'+sync+'</p></div>';
+  return h;
+}
+function exportJson(){
+  var data={}; COLLECTIES.forEach(function(c){data[c]=STORE[c];});
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  var a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="dvb-uren-backup-"+vandaagISO()+".json"; a.click();
+}
+function importJson(input){
+  var f=input.files[0]; if(!f) return; var rd=new FileReader();
+  rd.onload=function(){ try{ var d=JSON.parse(rd.result);
+    if(!confirm("Back-up laden? Dit voegt de data toe/overschrijft op id-niveau.")) return;
+    COLLECTIES.forEach(function(c){ (d[c]||[]).forEach(function(o){ if(!o.id)o.id=uid(); DB.update(c,o.id,o); }); });
+    toast("Back-up geladen ✓");
+  }catch(e){ toast("Kon bestand niet lezen"); } };
+  rd.readAsText(f);
+}
+function mailOverzicht(){
+  var regels=[];
+  STORE.projecten.forEach(function(p){
+    var rg=regelsVanProject(p.id); var werk=0,mw=0; rg.forEach(function(r){var u=urenDec(regelMs(r));werk+=u;if(r.meerwerk)mw+=u;});
+    var bud=0; Object.keys(p.budget||{}).forEach(function(k){bud+=parseFloat(p.budget[k])||0;});
+    var tarief=parseFloat(p.uurtarief)||0,mat=parseFloat(p.materiaalkosten)||0,off=parseFloat(p.offertebedrag)||0;
+    var marge=off-(werk*tarief)-mat;
+    regels.push(p.naam+": begroot "+fmtU(bud)+" u / werkelijk "+fmtU(werk)+" u"+(mw>0?(" / meerwerk "+fmtU(mw)+" u"):"")+(off>0?(" / marge "+fmtEuro(marge)):""));
+  });
+  var body="DVB Design — Projectoverzicht uren\nDatum: "+vandaagISO()+"\n\n"+(regels.length?regels.join("\n"):"Geen projecten.");
+  var payload={ _subject:"DVB urenoverzicht "+vandaagISO(), _captcha:"false", Overzicht:body };
+  toast("Versturen…");
+  fetch("https://formsubmit.co/ajax/"+MAIL_ONTVANGER,{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify(payload)})
+    .then(function(r){return r.json();}).then(function(){toast("Overzicht gemaild ✓");})
+    .catch(function(){ var url="mailto:"+MAIL_ONTVANGER+"?subject="+encodeURIComponent("DVB urenoverzicht "+vandaagISO())+"&body="+encodeURIComponent(body); window.location.href=url; });
+}
+
+/* ====================================================================
+   11. START
+   ==================================================================== */
+function init(){
+  if(firebaseIngevuld()){
+    try { DB=FireDB(); } catch(e){ console.warn("Firebase init mislukt, lokaal gebruiken:",e); DB=LocalDB(); }
+  } else { DB=LocalDB(); }
+  DB.start();
+  // demo-medewerkers bij eerste keer lokaal
+  if(DB.type==="local" && !STORE.medewerkers.length){
+    ["Roan","Koen","Duncan","Sophie","Dolf","Mark"].forEach(function(n){ STORE.medewerkers.push({id:uid(),naam:n,actief:true}); });
+    if(typeof localStorage!=="undefined") try{ localStorage.setItem("dvb_uren_v1", JSON.stringify(STORE)); }catch(e){}
+  }
+  render();
+}
+init();
+</script>
+
+<!-- ====================================================================
+     INSTALLATIE — FIREBASE KOPPELEN (eenmalig, ~5 min, gratis)
+     ====================================================================
+  Zolang FIREBASE_CONFIG bovenin leeg is, werkt de app lokaal op dit
+  apparaat (data wordt in de browser bewaard). Wil je dat het werkplaats-
+  scherm én de telefoons dezelfde data delen, koppel dan Firebase:
+
+  1. Ga naar https://console.firebase.google.com en log in met een Google-account.
+  2. Klik "Project toevoegen" → geef het een naam (bijv. "dvb-uren") → maak aan.
+  3. Klik linksboven op het tandwiel → "Projectinstellingen".
+  4. Scrol naar "Jouw apps" → klik op het web-icoon  </>  → geef een bijnaam → "App registreren".
+  5. Je krijgt nu een blokje "firebaseConfig" met apiKey, authDomain, projectId, enz.
+     Kopieer die waarden naar FIREBASE_CONFIG bovenin dit bestand.
+  6. In het linkermenu: "Build" → "Firestore Database" → "Database maken" →
+     kies een locatie (europe-west) → start in TESTMODUS (of zie regels hieronder).
+  7. Klaar! Zet dit index.html op GitHub Pages. Alle apparaten die de pagina
+     openen delen nu live dezelfde uren.
+
+  Veiligheidsregels (Firestore → Regels) — voor intern gebruik, simpel:
+      rules_version = '2';
+      service cloud.firestore {
+        match /databases/{database}/documents {
+          match /{document=**} { allow read, write: if true; }
+        }
+      }
+  (Wil je het afschermen? Zet er Firebase Authentication op en pas de regels aan.)
+==================================================================== -->
+</body>
+</html>
