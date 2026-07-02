@@ -333,15 +333,17 @@ var FIREBASE_CONFIG = {
 /* E-mailadres voor het versturen van overzichten (Beheer > Export). */
 var MAIL_ONTVANGER = "dolf@dvbdesign.nl";
 
-/* Toegangscode — wordt bij openen één keer per apparaat gevraagd.
-   Wijzig deze code wanneer je wilt; oude apparaten moeten 'm dan opnieuw invoeren.
-   Laat leeg ("") om de code helemaal uit te zetten. */
-var TOEGANGSCODE = "dvb2026";
+/* Toegangscode & beheercode staan hier NIET meer leesbaar, maar als
+   versleutelde vingerafdruk (SHA-256-hash). De app hasht wat je intypt en
+   vergelijkt dat met onderstaande waarde — zo staat het wachtwoord zelf
+   nergens in de code. Laat leeg ("") om een code helemaal uit te zetten.
+   Nieuwe code nodig? Vraag Claude om de bijbehorende hash, of gebruik een
+   online "SHA-256 generator" en plak de uitkomst hieronder. */
+var TOEGANGSCODE_HASH = "cdd2aaf9b26210bc5905161e242c9816fc009c1bfa0630d3c2206a2584dd9d90";
 
-/* Beheercode — alleen voor de eigenaar. Het tabblad Beheer gaat pas open
-   na deze code. Na het herladen van de pagina staat Beheer weer op slot
-   (veilig op een gedeeld werkplaatsscherm). Laat leeg ("") om uit te zetten. */
-var BEHEERCODE = "baas2026";
+/* Beheercode-hash — alleen voor de eigenaar. Het tabblad Beheer gaat pas open
+   na deze code. Na het herladen van de pagina staat Beheer weer op slot. */
+var BEHEERCODE_HASH = "2b67c98eec244c047bbe78bec3bf68cf273069cc86be4ed5fa021ede50370230";
 /* Welke tabbladen achter de beheercode zitten. Voeg "dash" toe als je ook
    het dashboard (met marges/kosten) wilt afschermen: ["beheer","dash"]. */
 var BESCHERMDE_VIEWS = ["beheer"];
@@ -361,13 +363,13 @@ var FASES = [
   { naam: "Ontwerp",          activiteiten: ["Klantgesprek","Inmeten","Ontwerpen","Revisies"] },
   { naam: "Werkvoorbereiding", activiteiten: ["Technisch tekenwerk","Bestellen","Planning","Overleg"] },
   { naam: "CNC",              activiteiten: ["Programmeren","Instellen","Frezen"] },
-  { naam: "Werkplaats",       activiteiten: ["Zagen","Assemblage","Schuren","Fineerwerk","Voorbereiding spuitwerk","Spuitwerk"] },
+  { naam: "Werkplaats",       activiteiten: ["Zagen","Banden","Assemblage","Opbouwen","Schuren","Fineerwerk","Voorbereiding spuitwerk","Spuitwerk"] },
   { naam: "Montage",          activiteiten: ["Laden","Reizen","Montage","Opleveren"] }
 ];
 /* Niet-project tijd (telt niet als productief op een project) */
 var OVERIG = {
   id: "overig", naam: "Overig / niet-project",
-  fases: [{ naam: "Indirect", activiteiten: ["Algemeen / werkplaats","Onderhoud machines","Intern overleg","Ziekte","Verlof / vakantie"] }]
+  fases: [{ naam: "Indirect", activiteiten: ["Algemeen / werkplaats","Opruimen","Werkplaats schoonmaken","Gereedschap / magazijn","Onderhoud machines","Intern overleg","Ziekte","Verlof / vakantie"] }]
 };
 var REISTIJD_ACT = "Reizen";
 var MEERWERK_REDENEN = ["Klantwijziging","Extra werkzaamheden","Fout in tekening","Productiefout","Wachten op materiaal","Leverancier vertraagd","Anders"];
@@ -475,7 +477,7 @@ function gaNaarView(view){
 document.querySelectorAll(".tabbar button").forEach(function(b){
   b.addEventListener("click", function(){
     var view=b.dataset.view;
-    if(BEHEERCODE && BESCHERMDE_VIEWS.indexOf(view)>=0 && !beheerOntgrendeld){ vraagBeheerCode(view); return; }
+    if(BEHEERCODE_HASH && BESCHERMDE_VIEWS.indexOf(view)>=0 && !beheerOntgrendeld){ vraagBeheerCode(view); return; }
     gaNaarView(view);
   });
 });
@@ -489,8 +491,11 @@ function vraagBeheerCode(view){
   setTimeout(function(){ var i=document.getElementById("bcode"); if(i){ i.focus(); i.onkeydown=function(e){ if(e.key==="Enter") checkBeheerCode(view); }; } },150);
 }
 function checkBeheerCode(view){
-  if(document.getElementById("bcode").value===BEHEERCODE){ beheerOntgrendeld=true; closeModal(); gaNaarView(view); toast("Beheer ontgrendeld ✓"); }
-  else { document.getElementById("bErr").textContent="Onjuiste code, probeer opnieuw."; var i=document.getElementById("bcode"); i.value=""; i.focus(); }
+  var inp=document.getElementById("bcode");
+  sha256hex(inp.value).then(function(h){
+    if(h===BEHEERCODE_HASH){ beheerOntgrendeld=true; closeModal(); gaNaarView(view); toast("Beheer ontgrendeld ✓"); }
+    else { document.getElementById("bErr").textContent="Onjuiste code, probeer opnieuw."; inp.value=""; inp.focus(); }
+  });
 }
 function vergrendelBeheer(){ beheerOntgrendeld=false; gaNaarView("klok"); toast("Beheer vergrendeld 🔒"); }
 
@@ -1067,7 +1072,7 @@ function beheerData(){
     '<button class="btn btn-wood" onclick="mailOverzicht()">✉ Mail projectoverzicht</button></div>';
   var sync = DB && DB.type==="firebase" ? "Live gesynchroniseerd via Firebase." : "Let op: data staat alléén op dit apparaat. Vul FIREBASE_CONFIG bovenin het bestand in om te delen tussen apparaten.";
   h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Synchronisatie</div><p class="muted" style="margin:0;">'+sync+'</p></div>';
-  if(BEHEERCODE){
+  if(BEHEERCODE_HASH){
     h+='<div class="card"><div class="t1" style="font-weight:600;margin-bottom:6px;">Beheer afsluiten</div>'+
       '<p class="muted" style="margin-top:0;">Sluit het beheergedeelte weer af (bijvoorbeeld op het werkplaatsscherm). Bij het herladen van de pagina gebeurt dit automatisch.</p>'+
       '<button class="btn btn-line" style="color:var(--err);border-color:var(--err)" onclick="vergrendelBeheer()">🔒 Beheer vergrendelen</button></div>';
@@ -1154,20 +1159,29 @@ function mailOverzicht(){
 /* ====================================================================
    11. START
    ==================================================================== */
-/* ---- Toegangscode-gate ---- */
+/* ---- Toegangscode-gate (met SHA-256 hashing) ---- */
+function sha256hex(str){
+  try {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)).then(function(buf){
+      return Array.prototype.map.call(new Uint8Array(buf), function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
+    });
+  } catch(e){ return Promise.resolve(""); }
+}
 function isOntgrendeld(){
-  if(!TOEGANGSCODE) return true;
-  try { return localStorage.getItem("dvb_uren_unlock")===TOEGANGSCODE; } catch(e){ return false; }
+  if(!TOEGANGSCODE_HASH) return true;
+  try { return localStorage.getItem("dvb_uren_unlock")===TOEGANGSCODE_HASH; } catch(e){ return false; }
 }
 function toonSlot(){
   var scr=document.getElementById("lockScreen"); scr.classList.add("show");
   var inp=document.getElementById("lockInput"), btn=document.getElementById("lockBtn"), err=document.getElementById("lockErr");
   setTimeout(function(){ inp.focus(); },200);
   function probeer(){
-    if(inp.value===TOEGANGSCODE){
-      try{ localStorage.setItem("dvb_uren_unlock", TOEGANGSCODE); }catch(e){}
-      scr.classList.remove("show"); startApp();
-    } else { err.textContent="Onjuiste code, probeer opnieuw."; inp.value=""; inp.focus(); }
+    sha256hex(inp.value).then(function(h){
+      if(h===TOEGANGSCODE_HASH){
+        try{ localStorage.setItem("dvb_uren_unlock", TOEGANGSCODE_HASH); }catch(e){}
+        scr.classList.remove("show"); startApp();
+      } else { err.textContent="Onjuiste code, probeer opnieuw."; inp.value=""; inp.focus(); }
+    });
   }
   btn.onclick=probeer;
   inp.onkeydown=function(e){ if(e.key==="Enter") probeer(); };
@@ -1193,6 +1207,6 @@ init();
 </script>
 
 <!-- Firebase is gekoppeld (project dvb-uren-app). Instellingen staan bovenin
-     het bestand: FIREBASE_CONFIG, TOEGANGSCODE, BEHEERCODE en MAIL_ONTVANGER. -->
+     het bestand: FIREBASE_CONFIG, TOEGANGSCODE_HASH, BEHEERCODE_HASH en MAIL_ONTVANGER. -->
 </body>
 </html>
